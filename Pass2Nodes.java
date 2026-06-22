@@ -297,10 +297,37 @@ class Pass2Nodes {
                     typedList = java.util.Collections.singletonList(val);
                 }
             }
-        } catch (Exception ignored) {
-        }
+        } catch (Exception ignored) {}
         if (ctx.firstActionId == null)
             ctx.firstActionId = id;
+        actionNode = createActionNodeFromType(typedList, name, id, ctx);
+        MainRunner.umlNodes.put(id, actionNode);
+
+        ctx.actionSysmlElements.put(id, obj);
+        if (actionNode instanceof CallBehaviorAction) {
+            CallBehaviorAction cba = (CallBehaviorAction) actionNode;
+            OpaqueBehavior beh = (cba.getBehavior() instanceof OpaqueBehavior)
+                    ? (OpaqueBehavior) cba.getBehavior()
+                    : null;
+            Map<String, OutputPin> outPins = new HashMap<>();
+            Map<String, InputPin> inPins = new HashMap<>();
+            extractPinsFromAction(obj, id, cba, beh, outPins, inPins, ctx);
+            if (!outPins.isEmpty())
+                ctx.actionOutputPins.put(id, outPins);
+            if (!inPins.isEmpty())
+                ctx.actionInputPins.put(id, inPins);
+            inheritParametersFromDefinition(typedList, id, cba, beh, inPins, outPins, ctx);
+            if (!outPins.isEmpty())
+                ctx.actionOutputPins.put(id, outPins);
+            if (!inPins.isEmpty())
+                ctx.actionInputPins.put(id, inPins);
+        }
+    }
+
+    /** 根据 typed 类型创建对应的 ActivityNode */
+    private static ActivityNode createActionNodeFromType(java.util.List<?> typedList, String name, String id,
+            PipelineContext ctx) {
+        ActivityNode actionNode = null;
         if (typedList != null && !typedList.isEmpty() && typedList.get(0) instanceof EObject) {
             String typedClassName = ((EObject) typedList.get(0)).eClass().getName();
             ctx.typedActionIds.add(id);
@@ -313,236 +340,224 @@ class Pass2Nodes {
         if (actionNode == null) {
             actionNode = UmlHelper.createCallBehaviorAction(ctx.activity, name);
         }
-        MainRunner.umlNodes.put(id, actionNode);
+        return actionNode;
+    }
 
-        ctx.actionSysmlElements.put(id, obj);
-        if (actionNode instanceof CallBehaviorAction) {
-            CallBehaviorAction cba = (CallBehaviorAction) actionNode;
-            OpaqueBehavior beh = (cba.getBehavior() instanceof OpaqueBehavior)
-                    ? (OpaqueBehavior) cba.getBehavior()
-                    : null;
-            Map<String, OutputPin> outPins = new HashMap<>();
-            Map<String, InputPin> inPins = new HashMap<>();
-            for (EObject child : obj.eContents()) {
-                String childCn = child.eClass().getName();
-                if (!"FeatureMembership".equals(childCn))
+    /** 从 ActionUsage 提取 InputPin/OutputPin 并注册到 ctx */
+    private static void extractPinsFromAction(EObject obj, String id, CallBehaviorAction cba,
+            OpaqueBehavior beh, Map<String, OutputPin> outPins, Map<String, InputPin> inPins,
+            PipelineContext ctx) {
+        for (EObject child : obj.eContents()) {
+            String childCn = child.eClass().getName();
+            if (!"FeatureMembership".equals(childCn))
+                continue;
+            for (EObject param : child.eContents()) {
+                if (!(param instanceof org.omg.sysml.lang.sysml.Element))
                     continue;
-                for (EObject param : child.eContents()) {
-                    if (!(param instanceof org.omg.sysml.lang.sysml.Element))
-                        continue;
-                    String paramCn = param.eClass().getName();
-                    if (!paramCn.contains("ReferenceUsage") && !paramCn.contains("ItemUsage"))
-                        continue;
-                    String paramName = ((org.omg.sysml.lang.sysml.Element) param).getDeclaredName();
-                    String direction = ExpressionUtils.getFeatureString(param, "direction");
-                    if (paramName == null || paramName.isEmpty() || direction == null || direction.isEmpty())
-                        continue;
+                String paramCn = param.eClass().getName();
+                if (!paramCn.contains("ReferenceUsage") && !paramCn.contains("ItemUsage"))
+                    continue;
+                String paramName = ((org.omg.sysml.lang.sysml.Element) param).getDeclaredName();
+                String direction = ExpressionUtils.getFeatureString(param, "direction");
+                if (paramName == null || paramName.isEmpty() || direction == null || direction.isEmpty())
+                    continue;
 
-                    try {
-                        String paramEid = ((org.omg.sysml.lang.sysml.Element) param).getElementId();
-                        if (paramEid != null) {
-                            ctx.featureIdToPinInfo.put(paramEid, new String[]{id, paramName, direction});
-                        }
-                    } catch (Exception ignored) {
+                try {
+                    String paramEid = ((org.omg.sysml.lang.sysml.Element) param).getElementId();
+                    if (paramEid != null) {
+                        ctx.featureIdToPinInfo.put(paramEid, new String[]{id, paramName, direction});
                     }
+                } catch (Exception ignored) {}
 
-                    if ("out".equals(direction)) {
-                        OutputPin pin = UMLFactory.eINSTANCE.createOutputPin();
-                        pin.setName(paramName);
-                        EStructuralFeature resultFeat = cba.eClass().getEStructuralFeature("result");
-                        if (resultFeat != null) {
-                            @SuppressWarnings("unchecked")
-                            java.util.List<Object> resultList = (java.util.List<Object>) cba.eGet(resultFeat);
-                            resultList.add(pin);
-                        }
-                        outPins.put(paramName, pin);
-                        if (beh != null) {
-                            org.eclipse.uml2.uml.Parameter bp = UMLFactory.eINSTANCE.createParameter();
-                            bp.setName(paramName);
-                            bp.setDirection(org.eclipse.uml2.uml.ParameterDirectionKind.OUT_LITERAL);
-                            beh.getOwnedParameters().add(bp);
-                        }
-                    } else if ("in".equals(direction)) {
-                        InputPin pin = UMLFactory.eINSTANCE.createInputPin();
-                        pin.setName(paramName);
-                        EStructuralFeature argFeat = cba.eClass().getEStructuralFeature("argument");
-                        if (argFeat != null) {
-                            @SuppressWarnings("unchecked")
-                            java.util.List<Object> argList = (java.util.List<Object>) cba.eGet(argFeat);
-                            argList.add(pin);
-                        }
-                        inPins.put(paramName, pin);
-                        if (beh != null) {
-                            org.eclipse.uml2.uml.Parameter bp = UMLFactory.eINSTANCE.createParameter();
-                            bp.setName(paramName);
-                            bp.setDirection(org.eclipse.uml2.uml.ParameterDirectionKind.IN_LITERAL);
-                            beh.getOwnedParameters().add(bp);
-                        }
-                        for (EObject pc : param.eContents()) {
-                            if (pc.eClass().getName().equals("FeatureValue")) {
-                                String[] srcRef = CalcModel.resolveFeatureChainSource(pc);
-                                if (srcRef != null && srcRef.length == 2) {
-                                    ctx.pinBindings.add(new String[]{id, paramName, srcRef[0], srcRef[1]});
-                                }
-                            }
-                        }
+                if ("out".equals(direction)) {
+                    OutputPin pin = UMLFactory.eINSTANCE.createOutputPin();
+                    pin.setName(paramName);
+                    EStructuralFeature resultFeat = cba.eClass().getEStructuralFeature("result");
+                    if (resultFeat != null) {
+                        @SuppressWarnings("unchecked")
+                        java.util.List<Object> resultList = (java.util.List<Object>) cba.eGet(resultFeat);
+                        resultList.add(pin);
                     }
-
-                    // 注册 FeatureValue 中 memberElement 引用 (供 BindingConnector 解析)
-                    for (EObject pc2 : param.eContents()) {
-                        if (pc2.eClass().getName().equals("FeatureValue")) {
-                            java.util.Iterator<EObject> fvi = pc2.eAllContents();
-                            while (fvi.hasNext()) {
-                                EObject fvc = fvi.next();
-                                if (fvc.eClass().getName().equals("Membership")) {
-                                    try {
-                                        EStructuralFeature meFeat = fvc.eClass().getEStructuralFeature("memberElement");
-                                        if (meFeat != null) {
-                                            Object meVal = fvc.eGet(meFeat);
-                                            if (meVal instanceof EObject) {
-                                                EObject resolved = EcoreUtil.resolve((EObject) meVal, fvc);
-                                                if (resolved instanceof org.omg.sysml.lang.sysml.Element) {
-                                                    String meId = ((org.omg.sysml.lang.sysml.Element) resolved)
-                                                            .getElementId();
-                                                    if (meId != null && !ctx.featureIdToPinInfo.containsKey(meId)) {
-                                                        ctx.featureIdToPinInfo.put(meId,
-                                                                new String[]{id, paramName, direction});
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    } catch (Exception ignored) {
-                                    }
-                                }
-                            }
-                        }
+                    outPins.put(paramName, pin);
+                    if (beh != null) {
+                        org.eclipse.uml2.uml.Parameter bp = UMLFactory.eINSTANCE.createParameter();
+                        bp.setName(paramName);
+                        bp.setDirection(org.eclipse.uml2.uml.ParameterDirectionKind.OUT_LITERAL);
+                        beh.getOwnedParameters().add(bp);
                     }
-                    // 注册 ReferenceSubsetting 中 FeatureChaining 的最后一个 chainingFeature
-                    for (EObject pc3 : param.eContents()) {
-                        if (pc3.eClass().getName().equals("ReferenceSubsetting")) {
-                            String lastChainingId = null;
-                            for (EObject fc : pc3.eContents()) {
-                                if (fc.eClass().getName().equals("Feature")) {
-                                    for (EObject fcc : fc.eContents()) {
-                                        if (fcc.eClass().getName().equals("FeatureChaining")) {
-                                            try {
-                                                EStructuralFeature cfFeat = fcc.eClass()
-                                                        .getEStructuralFeature("chainingFeature");
-                                                if (cfFeat != null) {
-                                                    Object cfVal = fcc.eGet(cfFeat);
-                                                    if (cfVal instanceof EObject) {
-                                                        EObject cfResolved = EcoreUtil.resolve((EObject) cfVal, fcc);
-                                                        if (cfResolved instanceof org.omg.sysml.lang.sysml.Element) {
-                                                            lastChainingId = ((org.omg.sysml.lang.sysml.Element) cfResolved)
-                                                                    .getElementId();
-                                                        }
-                                                    }
-                                                }
-                                            } catch (Exception ignored) {
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            if (lastChainingId != null) {
-                                ctx.featureIdToPinInfo.put(lastChainingId, new String[]{id, paramName, direction});
+                } else if ("in".equals(direction)) {
+                    InputPin pin = UMLFactory.eINSTANCE.createInputPin();
+                    pin.setName(paramName);
+                    EStructuralFeature argFeat = cba.eClass().getEStructuralFeature("argument");
+                    if (argFeat != null) {
+                        @SuppressWarnings("unchecked")
+                        java.util.List<Object> argList = (java.util.List<Object>) cba.eGet(argFeat);
+                        argList.add(pin);
+                    }
+                    inPins.put(paramName, pin);
+                    if (beh != null) {
+                        org.eclipse.uml2.uml.Parameter bp = UMLFactory.eINSTANCE.createParameter();
+                        bp.setName(paramName);
+                        bp.setDirection(org.eclipse.uml2.uml.ParameterDirectionKind.IN_LITERAL);
+                        beh.getOwnedParameters().add(bp);
+                    }
+                    for (EObject pc : param.eContents()) {
+                        if (pc.eClass().getName().equals("FeatureValue")) {
+                            String[] srcRef = CalcModel.resolveFeatureChainSource(pc);
+                            if (srcRef != null && srcRef.length == 2) {
+                                ctx.pinBindings.add(new String[]{id, paramName, srcRef[0], srcRef[1]});
                             }
                         }
                     }
                 }
-            }
-            if (!outPins.isEmpty())
-                ctx.actionOutputPins.put(id, outPins);
-            if (!inPins.isEmpty())
-                ctx.actionInputPins.put(id, inPins);
 
-            // 继承参数: 从 ActionDefinition 获取父类型定义的参数
-            if (typedList != null && !typedList.isEmpty() && typedList.get(0) instanceof EObject) {
-                EObject typeDef = (EObject) typedList.get(0);
-                if (typeDef.eClass().getName().contains("ActionDefinition")) {
-                    String typeDefId = (typeDef instanceof org.omg.sysml.lang.sysml.Element)
-                            ? ((org.omg.sysml.lang.sysml.Element) typeDef).getElementId()
-                            : null;
-                    if (typeDefId != null && ctx.actionSysmlElements.containsKey(typeDefId)) {
-                        EObject defObj = ctx.actionSysmlElements.get(typeDefId);
-                        for (EObject defChild : defObj.eContents()) {
-                            if (!defChild.eClass().getName().equals("FeatureMembership"))
-                                continue;
-                            for (EObject defParam : defChild.eContents()) {
-                                if (!(defParam instanceof org.omg.sysml.lang.sysml.Element))
-                                    continue;
-                                String defParamCn = defParam.eClass().getName();
-                                if (!defParamCn.contains("ReferenceUsage") && !defParamCn.contains("ItemUsage"))
-                                    continue;
-                                String defParamName = ((org.omg.sysml.lang.sysml.Element) defParam).getDeclaredName();
-                                String defDirection = ExpressionUtils.getFeatureString(defParam, "direction");
-                                if (defParamName == null || defParamName.isEmpty() || defDirection == null
-                                        || defDirection.isEmpty())
-                                    continue;
-                                if (inPins.containsKey(defParamName) || outPins.containsKey(defParamName))
-                                    continue;
-                                if ("in".equals(defDirection)) {
-                                    InputPin pin = UMLFactory.eINSTANCE.createInputPin();
-                                    pin.setName(defParamName);
-                                    EStructuralFeature argFeat = cba.eClass().getEStructuralFeature("argument");
-                                    if (argFeat != null) {
-                                        @SuppressWarnings("unchecked")
-                                        java.util.List<Object> argList = (java.util.List<Object>) cba.eGet(argFeat);
-                                        argList.add(pin);
-                                    }
-                                    inPins.put(defParamName, pin);
-                                    if (beh != null) {
-                                        org.eclipse.uml2.uml.Parameter bp = UMLFactory.eINSTANCE.createParameter();
-                                        bp.setName(defParamName);
-                                        bp.setDirection(org.eclipse.uml2.uml.ParameterDirectionKind.IN_LITERAL);
-                                        beh.getOwnedParameters().add(bp);
-                                    }
-                                    try {
-                                        String defParamEid = ((org.omg.sysml.lang.sysml.Element) defParam)
-                                                .getElementId();
-                                        if (defParamEid != null) {
-                                            ctx.featureIdToPinInfo.put(defParamEid,
-                                                    new String[]{id, defParamName, defDirection});
+                // 注册 FeatureValue 中 memberElement 引用 (供 BindingConnector 解析)
+                for (EObject pc2 : param.eContents()) {
+                    if (pc2.eClass().getName().equals("FeatureValue")) {
+                        java.util.Iterator<EObject> fvi = pc2.eAllContents();
+                        while (fvi.hasNext()) {
+                            EObject fvc = fvi.next();
+                            if (fvc.eClass().getName().equals("Membership")) {
+                                try {
+                                    EStructuralFeature meFeat = fvc.eClass().getEStructuralFeature("memberElement");
+                                    if (meFeat != null) {
+                                        Object meVal = fvc.eGet(meFeat);
+                                        if (meVal instanceof EObject) {
+                                            EObject resolved = EcoreUtil.resolve((EObject) meVal, fvc);
+                                            if (resolved instanceof org.omg.sysml.lang.sysml.Element) {
+                                                String meId = ((org.omg.sysml.lang.sysml.Element) resolved)
+                                                        .getElementId();
+                                                if (meId != null && !ctx.featureIdToPinInfo.containsKey(meId)) {
+                                                    ctx.featureIdToPinInfo.put(meId,
+                                                            new String[]{id, paramName, direction});
+                                                }
+                                            }
                                         }
-                                    } catch (Exception ignored) {
                                     }
-                                } else if ("out".equals(defDirection)) {
-                                    OutputPin pin = UMLFactory.eINSTANCE.createOutputPin();
-                                    pin.setName(defParamName);
-                                    EStructuralFeature resultFeat = cba.eClass().getEStructuralFeature("result");
-                                    if (resultFeat != null) {
-                                        @SuppressWarnings("unchecked")
-                                        java.util.List<Object> resultList = (java.util.List<Object>) cba
-                                                .eGet(resultFeat);
-                                        resultList.add(pin);
-                                    }
-                                    outPins.put(defParamName, pin);
-                                    if (beh != null) {
-                                        org.eclipse.uml2.uml.Parameter bp = UMLFactory.eINSTANCE.createParameter();
-                                        bp.setName(defParamName);
-                                        bp.setDirection(org.eclipse.uml2.uml.ParameterDirectionKind.OUT_LITERAL);
-                                        beh.getOwnedParameters().add(bp);
-                                    }
-                                    try {
-                                        String defParamEid = ((org.omg.sysml.lang.sysml.Element) defParam)
-                                                .getElementId();
-                                        if (defParamEid != null) {
-                                            ctx.featureIdToPinInfo.put(defParamEid,
-                                                    new String[]{id, defParamName, defDirection});
-                                        }
-                                    } catch (Exception ignored) {
+                                } catch (Exception ignored) {}
+                            }
+                        }
+                    }
+                }
+                // 注册 ReferenceSubsetting 中 FeatureChaining 的最后一个 chainingFeature
+                for (EObject pc3 : param.eContents()) {
+                    if (pc3.eClass().getName().equals("ReferenceSubsetting")) {
+                        String lastChainingId = null;
+                        for (EObject fc : pc3.eContents()) {
+                            if (fc.eClass().getName().equals("Feature")) {
+                                for (EObject fcc : fc.eContents()) {
+                                    if (fcc.eClass().getName().equals("FeatureChaining")) {
+                                        try {
+                                            EStructuralFeature cfFeat = fcc.eClass()
+                                                    .getEStructuralFeature("chainingFeature");
+                                            if (cfFeat != null) {
+                                                Object cfVal = fcc.eGet(cfFeat);
+                                                if (cfVal instanceof EObject) {
+                                                    EObject cfResolved = EcoreUtil.resolve((EObject) cfVal, fcc);
+                                                    if (cfResolved instanceof org.omg.sysml.lang.sysml.Element) {
+                                                        lastChainingId = ((org.omg.sysml.lang.sysml.Element) cfResolved)
+                                                                .getElementId();
+                                                    }
+                                                }
+                                            }
+                                        } catch (Exception ignored) {}
                                     }
                                 }
                             }
                         }
-                        if (!outPins.isEmpty())
-                            ctx.actionOutputPins.put(id, outPins);
-                        if (!inPins.isEmpty())
-                            ctx.actionInputPins.put(id, inPins);
+                        if (lastChainingId != null) {
+                            ctx.featureIdToPinInfo.put(lastChainingId, new String[]{id, paramName, direction});
+                        }
                     }
                 }
             }
         }
+    }
+
+    /** 从 ActionDefinition 继承父类型定义的参数 */
+    private static void inheritParametersFromDefinition(java.util.List<?> typedList, String id,
+            CallBehaviorAction cba, OpaqueBehavior beh, Map<String, InputPin> inPins,
+            Map<String, OutputPin> outPins, PipelineContext ctx) {
+        if (typedList == null || typedList.isEmpty() || !(typedList.get(0) instanceof EObject))
+            return;
+        EObject typeDef = (EObject) typedList.get(0);
+        if (!typeDef.eClass().getName().contains("ActionDefinition"))
+            return;
+        String typeDefId = (typeDef instanceof org.omg.sysml.lang.sysml.Element)
+                ? ((org.omg.sysml.lang.sysml.Element) typeDef).getElementId()
+                : null;
+        if (typeDefId == null || !ctx.actionSysmlElements.containsKey(typeDefId))
+            return;
+        EObject defObj = ctx.actionSysmlElements.get(typeDefId);
+        for (EObject defChild : defObj.eContents()) {
+            if (!defChild.eClass().getName().equals("FeatureMembership"))
+                continue;
+            for (EObject defParam : defChild.eContents()) {
+                if (!(defParam instanceof org.omg.sysml.lang.sysml.Element))
+                    continue;
+                String defParamCn = defParam.eClass().getName();
+                if (!defParamCn.contains("ReferenceUsage") && !defParamCn.contains("ItemUsage"))
+                    continue;
+                String defParamName = ((org.omg.sysml.lang.sysml.Element) defParam).getDeclaredName();
+                String defDirection = ExpressionUtils.getFeatureString(defParam, "direction");
+                if (defParamName == null || defParamName.isEmpty() || defDirection == null
+                        || defDirection.isEmpty())
+                    continue;
+                if (inPins.containsKey(defParamName) || outPins.containsKey(defParamName))
+                    continue;
+                if ("in".equals(defDirection)) {
+                    InputPin pin = UMLFactory.eINSTANCE.createInputPin();
+                    pin.setName(defParamName);
+                    EStructuralFeature argFeat = cba.eClass().getEStructuralFeature("argument");
+                    if (argFeat != null) {
+                        @SuppressWarnings("unchecked")
+                        java.util.List<Object> argList = (java.util.List<Object>) cba.eGet(argFeat);
+                        argList.add(pin);
+                    }
+                    inPins.put(defParamName, pin);
+                    if (beh != null) {
+                        org.eclipse.uml2.uml.Parameter bp = UMLFactory.eINSTANCE.createParameter();
+                        bp.setName(defParamName);
+                        bp.setDirection(org.eclipse.uml2.uml.ParameterDirectionKind.IN_LITERAL);
+                        beh.getOwnedParameters().add(bp);
+                    }
+                    try {
+                        String defParamEid = ((org.omg.sysml.lang.sysml.Element) defParam).getElementId();
+                        if (defParamEid != null) {
+                            ctx.featureIdToPinInfo.put(defParamEid,
+                                    new String[]{id, defParamName, defDirection});
+                        }
+                    } catch (Exception ignored) {}
+                } else if ("out".equals(defDirection)) {
+                    OutputPin pin = UMLFactory.eINSTANCE.createOutputPin();
+                    pin.setName(defParamName);
+                    EStructuralFeature resultFeat = cba.eClass().getEStructuralFeature("result");
+                    if (resultFeat != null) {
+                        @SuppressWarnings("unchecked")
+                        java.util.List<Object> resultList = (java.util.List<Object>) cba.eGet(resultFeat);
+                        resultList.add(pin);
+                    }
+                    outPins.put(defParamName, pin);
+                    if (beh != null) {
+                        org.eclipse.uml2.uml.Parameter bp = UMLFactory.eINSTANCE.createParameter();
+                        bp.setName(defParamName);
+                        bp.setDirection(org.eclipse.uml2.uml.ParameterDirectionKind.OUT_LITERAL);
+                        beh.getOwnedParameters().add(bp);
+                    }
+                    try {
+                        String defParamEid = ((org.omg.sysml.lang.sysml.Element) defParam).getElementId();
+                        if (defParamEid != null) {
+                            ctx.featureIdToPinInfo.put(defParamEid,
+                                    new String[]{id, defParamName, defDirection});
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+        if (!outPins.isEmpty())
+            ctx.actionOutputPins.put(id, outPins);
+        if (!inPins.isEmpty())
+            ctx.actionInputPins.put(id, inPins);
     }
 
     /** 预填充 decideConditionGroups, 确保 TransitionUsage handler 可用 */
@@ -562,56 +577,12 @@ class Pass2Nodes {
             ifParent = ifParent.eContainer();
         }
 
-        // === 提取条件: 优先从 ParameterMembership -> OperatorExpression ===
-        String conditionText = null;
-        StringBuilder debugInfo = new StringBuilder();
-
-        // 方法0 (优先): 从直接子元素 ParameterMembership 提取 OperatorExpression
-        for (EObject dc : obj.eContents()) {
-            if (dc.eClass().getName().contains("ParameterMembership")) {
-                for (EObject gc : dc.eContents()) {
-                    if (gc.eClass().getName().contains("OperatorExpression")) {
-                        String exprText = ExpressionUtils.buildExpressionText(gc);
-                        if (exprText != null && !exprText.isEmpty() && !exprText.contains(" . ")
-                                && ExpressionUtils.isValidExpression(exprText)) {
-                            conditionText = exprText;
-                        }
-                        break;
-                    }
-                }
-                if (conditionText != null)
-                    break;
-            }
-        }
-
-        // 方法1 (fallback): .sysml 正则提取 (位置感知)
-        if (conditionText == null || conditionText.isEmpty()) {
-            try {
-                String text = Files.readString(Paths.get(ctx.sysmlBasePath.replace(".sysmlx", ".sysml")));
-                Matcher m = Pattern.compile("if\\s+([^\\{]+)\\s*\\{").matcher(text);
-                int matchIdx = 0;
-                while (m.find()) {
-                    if (matchIdx == ctx.consumedIfRegexCount) {
-                        conditionText = m.group(1).trim();
-                        debugInfo.append("Used .sysml regex (pos=").append(ctx.consumedIfRegexCount).append("): ")
-                                .append(conditionText).append("\n");
-                        break;
-                    }
-                    matchIdx++;
-                }
-                ctx.consumedIfRegexCount++;
-            } catch (Exception ignored) {
-                // ignored
-            }
-        }
-
-        if (conditionText == null || conditionText.isEmpty()) {
-            conditionText = "true";
-            debugInfo.append("WARNING: Could not extract guard condition, using default 'true'\n");
-        }
-
-        if (debugInfo.length() > 0) {
-            System.out.println("[DEBUG] IfActionUsage " + (name != null ? name : id) + ":\n" + debugInfo);
+        // === 提取条件 ===
+        String[] condResult = extractIfCondition(obj, ctx);
+        String conditionText = condResult[0];
+        String debugInfoStr = condResult[1];
+        if (debugInfoStr != null && !debugInfoStr.isEmpty()) {
+            System.out.println("[DEBUG] IfActionUsage " + (name != null ? name : id) + ":\n" + debugInfoStr);
         }
 
         // === 创建 DecisionNode ===
@@ -628,78 +599,16 @@ class Pass2Nodes {
         }
 
         // === 从 ParameterMembership 子元素提取分支并创建节点 ===
-        List<String> branchBodies = new ArrayList<>();
         List<EObject> paramMemberships = new ArrayList<>();
         for (EObject dc : obj.eContents()) {
             if (dc.eClass().getName().contains("ParameterMembership"))
                 paramMemberships.add(dc);
         }
-
-        int branchCount = 0;
-        boolean hasNestedIf = false;
-        for (int pmIdx = 1; pmIdx < paramMemberships.size(); pmIdx++) {
-            EObject pm = paramMemberships.get(pmIdx);
-            for (EObject gc : pm.eContents()) {
-                if (!(gc instanceof org.omg.sysml.lang.sysml.Element))
-                    continue;
-                String gcClass = gc.eClass().getName();
-                String gcId = ((org.omg.sysml.lang.sysml.Element) gc).getElementId();
-
-                if (gcClass.contains("IfActionUsage")) {
-                    hasNestedIf = true;
-                    MainRunner.logicalEdges.add(new MainRunner.EdgeData(id, gcId, "else"));
-                    branchBodies.add(null);
-                    branchCount++;
-                } else if (gcClass.contains("ActionUsage") || gcClass.contains("AssignmentActionUsage")) {
-                    EObject nestedIfInBranch = null;
-                    for (EObject deepGc : gc.eContents()) {
-                        if (deepGc.eClass().getName().contains("IfActionUsage")
-                                && !deepGc.eClass().getName().contains("While")) {
-                            nestedIfInBranch = deepGc;
-                            break;
-                        }
-                    }
-                    if (nestedIfInBranch != null) {
-                        String nestedIfId = ((org.omg.sysml.lang.sysml.Element) nestedIfInBranch).getElementId();
-                        String nestedIfMergeId = nestedIfId + "_ifMerge";
-                        String guardStr = (branchCount == 0) ? conditionText : "else";
-                        MainRunner.logicalEdges.add(new MainRunner.EdgeData(id, nestedIfId, guardStr));
-                        branchBodies.add(nestedIfMergeId);
-                        hasNestedIf = true;
-                        branchCount++;
-                    } else {
-                        String gcName = ((org.omg.sysml.lang.sysml.Element) gc).getDeclaredName();
-                        String expr = ExpressionUtils.extractAssignmentText(gc);
-                        String nodeName;
-                        String bodyText;
-                        if (gcName != null && !gcName.isEmpty()) {
-                            nodeName = gcName;
-                            bodyText = null;
-                        } else if (!expr.isEmpty()) {
-                            nodeName = expr.replaceAll("[^a-zA-Z0-9_]", "_");
-                            bodyText = expr;
-                        } else {
-                            nodeName = ExpressionUtils.sanitizeName(gcClass) + "_" + gcId.substring(0, 8);
-                            bodyText = null;
-                        }
-                        ActivityNode branchNode;
-                        if (bodyText != null && !bodyText.isEmpty() && bodyText.contains("=")) {
-                            branchNode = UmlHelper.createOpaqueActionForAssignment(ctx.activity, nodeName, bodyText);
-                        } else {
-                            branchNode = UmlHelper.createCallBehaviorActionWithBody(ctx.activity, nodeName, bodyText,
-                                    "SysMLv2");
-                        }
-                        MainRunner.umlNodes.put(gcId, branchNode);
-                        MainRunner.uuidToNameMap.put(gcId, nodeName);
-                        MainRunner.nameToIdMap.put(nodeName, gcId);
-                        String guardStr = (branchCount == 0) ? conditionText : "else";
-                        MainRunner.logicalEdges.add(new MainRunner.EdgeData(id, gcId, guardStr));
-                        branchBodies.add(gcId);
-                        branchCount++;
-                    }
-                }
-            }
-        }
+        Object[] branchResult = createIfBranchNodes(obj, id, conditionText, paramMemberships, ctx);
+        @SuppressWarnings("unchecked")
+        List<String> branchBodies = (List<String>) branchResult[0];
+        boolean hasNestedIf = (Boolean) branchResult[1];
+        int branchCount = (Integer) branchResult[2];
 
         // === 创建 MergeNode 汇聚所有分支出口 ===
         String mergeId = id + "_ifMerge";
@@ -904,63 +813,10 @@ class Pass2Nodes {
         MainRunner.loopStartMerge.put(id, mergeId);
         MainRunner.loopEndDecision.put(id, decisionId);
 
-        // 提取循环变量名 (FeatureMembership -> ReferenceUsage)
-        String loopVarName = null;
-        for (EObject dc : obj.eContents()) {
-            if (dc.eClass().getName().contains("FeatureMembership")) {
-                for (EObject gc : dc.eContents()) {
-                    if (gc.eClass().getName().contains("ReferenceUsage")) {
-                        loopVarName = ((org.omg.sysml.lang.sysml.Element) gc).getDeclaredName();
-                        break;
-                    }
-                }
-                if (loopVarName != null) {
-                    break;
-                }
-            }
-        }
-
-        // 提取范围表达式 (第1个 ParameterMembership -> ReferenceUsage -> FeatureValue ->
-        // OperatorExpression)
-        String rangeText = null;
-        for (EObject dc : obj.eContents()) {
-            if (dc.eClass().getName().contains("ParameterMembership")) {
-                for (EObject gc : dc.eContents()) {
-                    if (gc.eClass().getName().contains("ReferenceUsage")) {
-                        for (EObject gg : gc.eContents()) {
-                            if (gg.eClass().getName().contains("FeatureValue")) {
-                                for (EObject expr : gg.eContents()) {
-                                    if (expr.eClass().getName().contains("OperatorExpression")) {
-                                        // 收集 LiteralInteger 值
-                                        List<String> literals = new ArrayList<>();
-                                        for (java.util.Iterator<EObject> lit = expr.eAllContents(); lit.hasNext();) {
-                                            EObject litObj = lit.next();
-                                            if (litObj.eClass().getName().contains("LiteralInteger")) {
-                                                try {
-                                                    var valFeat = litObj.eClass().getEStructuralFeature("value");
-                                                    if (valFeat != null) {
-                                                        Object val = litObj.eGet(valFeat);
-                                                        if (val != null) {
-                                                            literals.add(val.toString());
-                                                        }
-                                                    }
-                                                } catch (Exception ignored) {
-                                                    // ignored
-                                                }
-                                            }
-                                        }
-                                        if (!literals.isEmpty()) {
-                                            rangeText = String.join(", ", literals);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                break; // 只取第一个 ParameterMembership
-            }
-        }
+        // 提取循环变量和范围表达式
+        String[] loopInfo = extractForLoopVarAndRange(obj);
+        String loopVarName = loopInfo[0];
+        String rangeText = loopInfo[1];
 
         // 条件文本
         String condText;
@@ -973,93 +829,8 @@ class Pass2Nodes {
         }
         MainRunner.loopConditionText.put(id, condText);
 
-        // 提取循环体 (第2个 ParameterMembership -> ActionUsage -> 可能含嵌套循环)
-        int pmCount = 0;
-        String bodyActionId = null;
-        for (EObject dc : obj.eContents()) {
-            if (dc.eClass().getName().contains("ParameterMembership")) {
-                pmCount++;
-                if (pmCount == 2) { // 第2个 PM 是循环体
-                    for (EObject gc : dc.eContents()) {
-                        String gcClass = gc.eClass().getName();
-                        if (!(gc instanceof org.omg.sysml.lang.sysml.Element))
-                            continue;
-                        String gcId = ((org.omg.sysml.lang.sysml.Element) gc).getElementId();
-
-                        // 检查 ActionUsage 内部是否包含嵌套循环
-                        if (gcClass.contains("ActionUsage") || gcClass.contains("AssignmentActionUsage")) {
-                            EObject nestedLoop = null;
-                            for (EObject inner : gc.eContents()) {
-                                String innerCn = inner.eClass().getName();
-                                if ("ForLoopActionUsage".equals(innerCn) || "WhileLoopActionUsage".equals(innerCn)
-                                        || "LoopActionUsage".equals(innerCn)) {
-                                    nestedLoop = inner;
-                                    break;
-                                }
-                            }
-                            if (nestedLoop != null) {
-                                // 嵌套循环: 展开并连接到外层 for
-                                String nc = nestedLoop.eClass().getName();
-                                String[] res;
-                                if ("ForLoopActionUsage".equals(nc))
-                                    res = LoopExpander.expandNestedForLoop(ctx.activity, nestedLoop, ctx.sysmlBasePath);
-                                else if ("WhileLoopActionUsage".equals(nc))
-                                    res = LoopExpander.expandNestedWhileLoop(ctx.activity, nestedLoop,
-                                            ctx.sysmlBasePath);
-                                else
-                                    res = LoopExpander.expandNestedLoopAction(ctx.activity, nestedLoop,
-                                            ctx.sysmlBasePath);
-                                bodyActionId = res[0]; // 用内层入口作为 body 代理
-                                // 连接: 外层 merge -> 内层入口, 内层出口 -> 外层 merge (回边)
-                                MainRunner.logicalEdges.add(new MainRunner.EdgeData(mergeId, res[0]));
-                                MainRunner.logicalEdges.add(new MainRunner.EdgeData(res[1], mergeId));
-                                // 将嵌套循环的所有节点加入 loopBodyNodeIds
-                                for (java.util.Iterator<EObject> it = nestedLoop.eAllContents(); it.hasNext();) {
-                                    EObject d = it.next();
-                                    if (d instanceof org.omg.sysml.lang.sysml.Element) {
-                                        String dId = ((org.omg.sysml.lang.sysml.Element) d).getElementId();
-                                        if (dId != null) {
-                                            MainRunner.loopBodyNodeIds.add(dId);
-                                        }
-                                    }
-                                }
-                                break;
-                            }
-                            // 普通动作 (无嵌套循环)
-                            EObject bodyObj = gc;
-                            for (EObject inner : gc.eContents()) {
-                                if (inner.eClass().getName().contains("AssignmentActionUsage")) {
-                                    bodyObj = inner;
-                                    break;
-                                }
-                            }
-                            String expr = ExpressionUtils.extractAssignmentText(bodyObj);
-                            String nodeName;
-                            String bodyText;
-                            if (!expr.isEmpty()) {
-                                nodeName = expr.replaceAll("[^a-zA-Z0-9_]", "_");
-                                bodyText = expr;
-                            } else {
-                                nodeName = "ForLoopBody_" + gcId.substring(0, Math.min(8, gcId.length()));
-                                bodyText = "forLoopBody";
-                            }
-                            ActivityNode bodyNode;
-                            if (!expr.isEmpty() && expr.contains("=")) {
-                                bodyNode = UmlHelper.createOpaqueActionForAssignment(ctx.activity, nodeName, expr);
-                            } else {
-                                bodyNode = UmlHelper.createCallBehaviorActionWithBody(ctx.activity, nodeName, bodyText,
-                                        "SysMLv2");
-                            }
-                            MainRunner.umlNodes.put(gcId, bodyNode);
-                            MainRunner.uuidToNameMap.put(gcId, nodeName);
-                            bodyActionId = gcId;
-                            break;
-                        }
-                    }
-                    break;
-                }
-            }
-        }
+        // 提取循环体
+        String bodyActionId = createForLoopBodyNode(obj, id, mergeId, ctx);
 
         // 连接: Merge -> Body -> Decision (仅当 body 是普通动作时)
         if (bodyActionId != null && !MainRunner.logicalEdges.stream().anyMatch(e -> e.source.equals(mergeId))) {
@@ -1105,91 +876,20 @@ class Pass2Nodes {
     /** 处理 WhileLoopActionUsage: 创建 while/until/while+until 循环结构 */
     private static void handleWhileLoopActionUsage(EObject obj, String id, String name, PipelineContext ctx,
             Resource resource) {
-        // ===== 提取条件: 优先从 ParameterMembership 子元素按位置提取 =====
-        // 第1个 PM = while 条件, 第3个 PM (若存在) = until 条件
-        String whileCondText = null;
-        String untilCondText = null;
-        int pmIdx = 0;
-        for (EObject child : obj.eContents()) {
-            if (!child.eClass().getName().equals("ParameterMembership"))
-                continue;
-            pmIdx++;
-            if (pmIdx == 1 || pmIdx == 3) {
-                // 在 PM 中搜索条件表达式 (递归搜索, 处理 FeatureMembership 嵌套)
-                String condFromPM = null;
-                for (java.util.Iterator<EObject> deepIt = child.eAllContents(); deepIt.hasNext();) {
-                    EObject deep = deepIt.next();
-                    if (condFromPM != null) {
-                        break; // 已找到, 不再搜索
-                    }
-                    String deepCn = deep.eClass().getName();
-                    if (deepCn.contains("Expression")) {
-                        // OperatorExpression, FeatureReferenceExpression, etc.
-                        String astText = ExpressionUtils.buildExpressionText(deep);
-                        if (astText != null && !astText.isEmpty() && !astText.contains(" . ")
-                                && ExpressionUtils.isValidExpression(astText)) {
-                            condFromPM = astText;
-                        }
-                    } else if ("ReferenceUsage".equals(deepCn)) {
-                        // 简单变量引用 (如 until b 中的 b)
-                        if (deep instanceof org.omg.sysml.lang.sysml.Element) {
-                            String refName = ((org.omg.sysml.lang.sysml.Element) deep).getDeclaredName();
-                            if (refName != null && !refName.isEmpty()) {
-                                condFromPM = refName;
-                            }
-                        }
-                    }
-                }
-                if (condFromPM != null && !condFromPM.isEmpty()) {
-                    if (pmIdx == 1) {
-                        whileCondText = condFromPM;
-                    } else
-                        untilCondText = condFromPM;
-                }
-            }
-        }
-
-        boolean hasWhile = whileCondText != null && !whileCondText.isEmpty();
-        boolean hasUntil = untilCondText != null && !untilCondText.isEmpty();
-        boolean isUntil = hasUntil && !hasWhile;
-
-        // condText 用于 loopConditionText (PASS 4 回边守卫)
-        String condText;
-        if (hasUntil) {
-            condText = untilCondText;
-        } else if (hasWhile) {
-            condText = whileCondText;
-        } else
-            condText = "";
+        String[] condResult = extractWhileLoopConditions(obj);
+        String whileCondText = condResult[0];
+        String untilCondText = condResult[1];
+        boolean hasWhile = Boolean.parseBoolean(condResult[2]);
+        boolean hasUntil = Boolean.parseBoolean(condResult[3]);
+        String condText = condResult[4];
+        boolean isUntil = Boolean.parseBoolean(condResult[5]);
 
         MainRunner.whileLoopCondText.put(id, condText);
         MainRunner.whileLoopIsUntil.put(id, isUntil);
         MainRunner.whileLoopIsWhileUntil.put(id, hasWhile && hasUntil);
-        // postLoopAction: 全局正则已移除 (跨循环串扰风险), 暂置 null
-        String postLoopAction = null;
-        MainRunner.whileLoopPostLoopActions.put(id, postLoopAction);
+        MainRunner.whileLoopPostLoopActions.put(id, null);
 
-        // ===== 收集 body 内所有元素 (包括 IfActionUsage) =====
-        List<EObject> bodyElements = new ArrayList<>();
-        for (EObject child : obj.eContents()) {
-            if (!child.eClass().getName().equals("ParameterMembership"))
-                continue;
-            for (EObject ore : child.eContents()) {
-                if (!ore.eClass().getName().equals("ActionUsage"))
-                    continue;
-                for (EObject fm : ore.eContents()) {
-                    if (!fm.eClass().getName().equals("FeatureMembership"))
-                        continue;
-                    for (EObject inner : fm.eContents()) {
-                        String ic = inner.eClass().getName();
-                        if ("SuccessionAsUsage".equals(ic) || "ParameterMembership".equals(ic)) {
-                            continue;
-                        }
-                        bodyElements.add(inner);
-                    }
-                }
-            }
-        }
+        List<EObject> bodyElements = collectWhileLoopBodyElements(obj);
 
         // ===== 创建循环入口 MergeNode =====
         String mergeId = id + "_merge";
@@ -1388,183 +1088,247 @@ class Pass2Nodes {
 
         // ===== 构建内部控制流 =====
         if (isUntil) {
-            // until 循环: Merge -> body -> untilDecision -> (cond: exit, else: Merge)
-            if (!bodyNodeIds.isEmpty()) {
-                ControlFlow mergeToBody = UMLFactory.eINSTANCE.createControlFlow();
-                mergeToBody.setSource(merge);
-                mergeToBody.setTarget(MainRunner.umlNodes.get(bodyNodeIds.get(0)));
-                ctx.activity.getEdges().add(mergeToBody);
-
-                // body 内部顺序流 (含 if 结构)
-                LoopExpander.buildBodyInternalFlows(ctx.activity, bodyNodeIds, ifDecisionIds, ifMergeIds,
-                        ifConditionTexts, ifThenBranchIds, MainRunner.umlNodes, merge, untilDecision);
-
-                // 判断 body 最后一个节点是否是 ifDecision
-                String lastBodyId = bodyNodeIds.get(bodyNodeIds.size() - 1);
-                boolean lastIsIfDecision = false;
-                for (String ifDecId : ifDecisionIds.values()) {
-                    if (lastBodyId.equals(ifDecId)) {
-                        lastIsIfDecision = true;
-                        break;
-                    }
-                }
-                if (!lastIsIfDecision) {
-                    // 普通动作 -> untilDecision
-                    ControlFlow toUntilDec = UMLFactory.eINSTANCE.createControlFlow();
-                    toUntilDec.setSource(MainRunner.umlNodes.get(lastBodyId));
-                    toUntilDec.setTarget(untilDecision);
-                    ctx.activity.getEdges().add(toUntilDec);
-                }
-            }
-
-            // 回边: untilDecision -> Merge (继续循环, guard=else)
-            ControlFlow backEdge = UMLFactory.eINSTANCE.createControlFlow();
-            backEdge.setSource(untilDecision);
-            backEdge.setTarget(merge);
-            OpaqueExpression backGuard = UMLFactory.eINSTANCE.createOpaqueExpression();
-            backGuard.getBodies().add("else");
-            backEdge.setGuard(backGuard);
-            ctx.activity.getEdges().add(backEdge);
+            buildUntilLoopFlows(ctx, bodyNodeIds, ifDecisionIds, ifMergeIds, ifConditionTexts, ifThenBranchIds, merge, untilDecision);
         } else if (hasWhile && hasUntil) {
-            // ===== while+until 双条件循环 =====
-            // Merge -> whileDecision(while_cond) -> body -> untilDecision(until_cond)
-
-            // 1. 创建入口 DecisionNode (while 条件)
-            String whileDecId = id + "_whileEntryDecision";
-            String whileDecName = whileCondText + "?";
-            DecisionNode whileDecision = (DecisionNode) ctx.activity.createOwnedNode(whileDecName,
-                    UMLPackage.Literals.DECISION_NODE);
-            MainRunner.umlNodes.put(whileDecId, whileDecision);
-            MainRunner.whileLoopEntryIds.put(id, whileDecId);
-
-            // 2. Merge -> whileDecision
-            ControlFlow mergeToWhileDec = UMLFactory.eINSTANCE.createControlFlow();
-            mergeToWhileDec.setSource(merge);
-            mergeToWhileDec.setTarget(whileDecision);
-            ctx.activity.getEdges().add(mergeToWhileDec);
-
-            // 3. whileDecision(true/whileCond) -> body[0]
-            if (!bodyNodeIds.isEmpty()) {
-                ControlFlow trueBranch = UMLFactory.eINSTANCE.createControlFlow();
-                trueBranch.setSource(whileDecision);
-                trueBranch.setTarget(MainRunner.umlNodes.get(bodyNodeIds.get(0)));
-                OpaqueExpression whileGuard = UMLFactory.eINSTANCE.createOpaqueExpression();
-                whileGuard.getBodies().add(whileCondText);
-                trueBranch.setGuard(whileGuard);
-                ctx.activity.getEdges().add(trueBranch);
-            }
-
-            // 5. body -> untilDecision (内部流)
-            if (!bodyNodeIds.isEmpty()) {
-                LoopExpander.buildBodyInternalFlows(ctx.activity, bodyNodeIds, ifDecisionIds, ifMergeIds,
-                        ifConditionTexts, ifThenBranchIds, MainRunner.umlNodes, merge, untilDecision);
-
-                // 连接 body 最后一个节点 -> untilDecision (如果不是 ifDecision)
-                String lastBodyId = bodyNodeIds.get(bodyNodeIds.size() - 1);
-                boolean lastIsIfDecision = false;
-                for (String ifDecId : ifDecisionIds.values()) {
-                    if (lastBodyId.equals(ifDecId)) {
-                        lastIsIfDecision = true;
-                        break;
-                    }
-                }
-                if (!lastIsIfDecision) {
-                    ControlFlow toUntilDec = UMLFactory.eINSTANCE.createControlFlow();
-                    toUntilDec.setSource(MainRunner.umlNodes.get(lastBodyId));
-                    toUntilDec.setTarget(untilDecision);
-                    ctx.activity.getEdges().add(toUntilDec);
-                }
-            }
-
-            // 6. 创建出口 MergeNode (while+until 统一退出点)
-            String exitMergeId = id + "_whileUntilExitMerge";
-            String exitMergeName = (name != null ? name : "Loop") + "_ExitMerge";
-            MergeNode exitMerge = (MergeNode) ctx.activity.createOwnedNode(exitMergeName,
-                    UMLPackage.Literals.MERGE_NODE);
-            MainRunner.umlNodes.put(exitMergeId, exitMerge);
-            MainRunner.whileLoopExitMergeIds.put(id, exitMergeId);
-
-            // 7. whileDecision(false/else) -> exitMerge (while条件不满足,跳过整个循环)
-            ControlFlow whileFalseToExit = UMLFactory.eINSTANCE.createControlFlow();
-            whileFalseToExit.setSource(whileDecision);
-            whileFalseToExit.setTarget(exitMerge);
-            OpaqueExpression whileFalseGuard = UMLFactory.eINSTANCE.createOpaqueExpression();
-            whileFalseGuard.getBodies().add("else");
-            whileFalseToExit.setGuard(whileFalseGuard);
-            ctx.activity.getEdges().add(whileFalseToExit);
-
-            // 8. untilDecision(untilCond) -> exitMerge (until条件满足,退出循环)
-            ControlFlow untilToExit = UMLFactory.eINSTANCE.createControlFlow();
-            untilToExit.setSource(untilDecision);
-            untilToExit.setTarget(exitMerge);
-            OpaqueExpression untilGuard = UMLFactory.eINSTANCE.createOpaqueExpression();
-            untilGuard.getBodies().add(untilCondText);
-            untilToExit.setGuard(untilGuard);
-            ctx.activity.getEdges().add(untilToExit);
-
-            // 9. untilDecision(else) -> Merge (until条件不满足,继续循环)
-            ControlFlow backEdge2 = UMLFactory.eINSTANCE.createControlFlow();
-            backEdge2.setSource(untilDecision);
-            backEdge2.setTarget(merge);
-            OpaqueExpression backGuard2 = UMLFactory.eINSTANCE.createOpaqueExpression();
-            backGuard2.getBodies().add("else");
-            backEdge2.setGuard(backGuard2);
-            ctx.activity.getEdges().add(backEdge2);
-
-            System.out.println("[WHILE-UNTIL] id=" + id.substring(0, Math.min(8, id.length())) + " while="
-                    + whileCondText + " until=" + untilCondText);
+            buildWhileUntilLoopFlows(ctx, bodyNodeIds, ifDecisionIds, ifMergeIds, ifConditionTexts, ifThenBranchIds, merge, untilDecision, whileCondText, untilCondText, name, id);
         } else {
-            // while 循环: Merge -> whileDecision -> body -> Merge (回边)
-            // whileDecision(else) -> ExitMerge (独立出口)
-            ControlFlow mergeToDec = UMLFactory.eINSTANCE.createControlFlow();
-            mergeToDec.setSource(merge);
-            mergeToDec.setTarget(untilDecision);
-            ctx.activity.getEdges().add(mergeToDec);
+            buildWhileLoopFlows(ctx, bodyNodeIds, ifDecisionIds, ifMergeIds, ifConditionTexts, ifThenBranchIds, merge, untilDecision, condText, name, id);
+        }
+    }
 
-            // 创建纯 while 的独立 ExitMerge (分离出口和回边)
-            String pureExitMergeId = id + "_pureWhileExitMerge";
-            String pureExitMergeName = (name != null ? name : "Loop") + "_ExitMerge";
-            MergeNode pureExitMerge = (MergeNode) ctx.activity.createOwnedNode(pureExitMergeName,
-                    UMLPackage.Literals.MERGE_NODE);
-            MainRunner.umlNodes.put(pureExitMergeId, pureExitMerge);
-            MainRunner.whileLoopPureExitMergeIds.put(id, pureExitMergeId);
-
-            // Decision(else) -> ExitMerge (循环退出路径)
-            ControlFlow exitToMerge = UMLFactory.eINSTANCE.createControlFlow();
-            exitToMerge.setSource(untilDecision);
-            exitToMerge.setTarget(pureExitMerge);
-            OpaqueExpression exitGuard = UMLFactory.eINSTANCE.createOpaqueExpression();
-            exitGuard.getBodies().add("else");
-            exitToMerge.setGuard(exitGuard);
-            ctx.activity.getEdges().add(exitToMerge);
-
-            if (!bodyNodeIds.isEmpty()) {
-                ControlFlow trueBranch = UMLFactory.eINSTANCE.createControlFlow();
-                trueBranch.setSource(untilDecision);
-                trueBranch.setTarget(MainRunner.umlNodes.get(bodyNodeIds.get(0)));
-                OpaqueExpression trueGuard = UMLFactory.eINSTANCE.createOpaqueExpression();
-                trueGuard.getBodies().add(condText);
-                trueBranch.setGuard(trueGuard);
-                ctx.activity.getEdges().add(trueBranch);
-
-                LoopExpander.buildBodyInternalFlows(ctx.activity, bodyNodeIds, ifDecisionIds, ifMergeIds,
-                        ifConditionTexts, ifThenBranchIds, MainRunner.umlNodes, merge, null);
-
-                // while 循环: last body node -> Merge (回边, 循环继续)
-                String lastBodyId = bodyNodeIds.get(bodyNodeIds.size() - 1);
-                boolean lastIsIfDecision = false;
-                for (String ifDecId : ifDecisionIds.values()) {
-                    if (lastBodyId.equals(ifDecId)) {
-                        lastIsIfDecision = true;
-                        break;
+    /** 从 WhileLoopActionUsage 提取 while/until 条件 */
+    private static String[] extractWhileLoopConditions(EObject obj) {
+        String whileCondText = null;
+        String untilCondText = null;
+        int pmIdx = 0;
+        for (EObject child : obj.eContents()) {
+            if (!child.eClass().getName().equals("ParameterMembership"))
+                continue;
+            pmIdx++;
+            if (pmIdx == 1 || pmIdx == 3) {
+                String condFromPM = null;
+                for (java.util.Iterator<EObject> deepIt = child.eAllContents(); deepIt.hasNext();) {
+                    EObject deep = deepIt.next();
+                    if (condFromPM != null) break;
+                    String deepCn = deep.eClass().getName();
+                    if (deepCn.contains("Expression")) {
+                        String astText = ExpressionUtils.buildExpressionText(deep);
+                        if (astText != null && !astText.isEmpty() && !astText.contains(" . ")
+                                && ExpressionUtils.isValidExpression(astText)) {
+                            condFromPM = astText;
+                        }
+                    } else if ("ReferenceUsage".equals(deepCn)) {
+                        if (deep instanceof org.omg.sysml.lang.sysml.Element) {
+                            String refName = ((org.omg.sysml.lang.sysml.Element) deep).getDeclaredName();
+                            if (refName != null && !refName.isEmpty()) {
+                                condFromPM = refName;
+                            }
+                        }
                     }
                 }
-                if (!lastIsIfDecision) {
-                    ControlFlow backEdge = UMLFactory.eINSTANCE.createControlFlow();
-                    backEdge.setSource(MainRunner.umlNodes.get(lastBodyId));
-                    backEdge.setTarget(merge);
-                    ctx.activity.getEdges().add(backEdge);
+                if (condFromPM != null && !condFromPM.isEmpty()) {
+                    if (pmIdx == 1) whileCondText = condFromPM;
+                    else untilCondText = condFromPM;
                 }
+            }
+        }
+        boolean hasWhile = whileCondText != null && !whileCondText.isEmpty();
+        boolean hasUntil = untilCondText != null && !untilCondText.isEmpty();
+        boolean isUntil = hasUntil && !hasWhile;
+        String condText;
+        if (hasUntil) condText = untilCondText;
+        else if (hasWhile) condText = whileCondText;
+        else condText = "";
+        return new String[]{whileCondText, untilCondText, String.valueOf(hasWhile), String.valueOf(hasUntil), condText, String.valueOf(isUntil)};
+    }
+
+    /** 收集 WhileLoop body 内所有元素 */
+    private static List<EObject> collectWhileLoopBodyElements(EObject obj) {
+        List<EObject> bodyElements = new ArrayList<>();
+        for (EObject child : obj.eContents()) {
+            if (!child.eClass().getName().equals("ParameterMembership"))
+                continue;
+            for (EObject ore : child.eContents()) {
+                if (!ore.eClass().getName().equals("ActionUsage"))
+                    continue;
+                for (EObject fm : ore.eContents()) {
+                    if (!fm.eClass().getName().equals("FeatureMembership"))
+                        continue;
+                    for (EObject inner : fm.eContents()) {
+                        String ic = inner.eClass().getName();
+                        if ("SuccessionAsUsage".equals(ic) || "ParameterMembership".equals(ic)) {
+                            continue;
+                        }
+                        bodyElements.add(inner);
+                    }
+                }
+            }
+        }
+        return bodyElements;
+    }
+
+    /** until 循环控制流: Merge -> body -> untilDecision -> 回边 */
+    private static void buildUntilLoopFlows(PipelineContext ctx, List<String> bodyNodeIds,
+            Map<String, String> ifDecisionIds, Map<String, String> ifMergeIds,
+            Map<String, String> ifConditionTexts, Map<String, List<String>> ifThenBranchIds,
+            MergeNode merge, DecisionNode untilDecision) {
+        if (!bodyNodeIds.isEmpty()) {
+            ControlFlow mergeToBody = UMLFactory.eINSTANCE.createControlFlow();
+            mergeToBody.setSource(merge);
+            mergeToBody.setTarget(MainRunner.umlNodes.get(bodyNodeIds.get(0)));
+            ctx.activity.getEdges().add(mergeToBody);
+
+            LoopExpander.buildBodyInternalFlows(ctx.activity, bodyNodeIds, ifDecisionIds, ifMergeIds,
+                    ifConditionTexts, ifThenBranchIds, MainRunner.umlNodes, merge, untilDecision);
+
+            String lastBodyId = bodyNodeIds.get(bodyNodeIds.size() - 1);
+            boolean lastIsIfDecision = false;
+            for (String ifDecId : ifDecisionIds.values()) {
+                if (lastBodyId.equals(ifDecId)) { lastIsIfDecision = true; break; }
+            }
+            if (!lastIsIfDecision) {
+                ControlFlow toUntilDec = UMLFactory.eINSTANCE.createControlFlow();
+                toUntilDec.setSource(MainRunner.umlNodes.get(lastBodyId));
+                toUntilDec.setTarget(untilDecision);
+                ctx.activity.getEdges().add(toUntilDec);
+            }
+        }
+        ControlFlow backEdge = UMLFactory.eINSTANCE.createControlFlow();
+        backEdge.setSource(untilDecision);
+        backEdge.setTarget(merge);
+        OpaqueExpression backGuard = UMLFactory.eINSTANCE.createOpaqueExpression();
+        backGuard.getBodies().add("else");
+        backEdge.setGuard(backGuard);
+        ctx.activity.getEdges().add(backEdge);
+    }
+
+    /** while+until 双条件循环控制流 */
+    private static void buildWhileUntilLoopFlows(PipelineContext ctx, List<String> bodyNodeIds,
+            Map<String, String> ifDecisionIds, Map<String, String> ifMergeIds,
+            Map<String, String> ifConditionTexts, Map<String, List<String>> ifThenBranchIds,
+            MergeNode merge, DecisionNode untilDecision, String whileCondText, String untilCondText,
+            String name, String id) {
+        String whileDecId = id + "_whileEntryDecision";
+        String whileDecName = whileCondText + "?";
+        DecisionNode whileDecision = (DecisionNode) ctx.activity.createOwnedNode(whileDecName,
+                UMLPackage.Literals.DECISION_NODE);
+        MainRunner.umlNodes.put(whileDecId, whileDecision);
+        MainRunner.whileLoopEntryIds.put(id, whileDecId);
+
+        ControlFlow mergeToWhileDec = UMLFactory.eINSTANCE.createControlFlow();
+        mergeToWhileDec.setSource(merge);
+        mergeToWhileDec.setTarget(whileDecision);
+        ctx.activity.getEdges().add(mergeToWhileDec);
+
+        if (!bodyNodeIds.isEmpty()) {
+            ControlFlow trueBranch = UMLFactory.eINSTANCE.createControlFlow();
+            trueBranch.setSource(whileDecision);
+            trueBranch.setTarget(MainRunner.umlNodes.get(bodyNodeIds.get(0)));
+            OpaqueExpression whileGuard = UMLFactory.eINSTANCE.createOpaqueExpression();
+            whileGuard.getBodies().add(whileCondText);
+            trueBranch.setGuard(whileGuard);
+            ctx.activity.getEdges().add(trueBranch);
+        }
+
+        if (!bodyNodeIds.isEmpty()) {
+            LoopExpander.buildBodyInternalFlows(ctx.activity, bodyNodeIds, ifDecisionIds, ifMergeIds,
+                    ifConditionTexts, ifThenBranchIds, MainRunner.umlNodes, merge, untilDecision);
+
+            String lastBodyId = bodyNodeIds.get(bodyNodeIds.size() - 1);
+            boolean lastIsIfDecision = false;
+            for (String ifDecId : ifDecisionIds.values()) {
+                if (lastBodyId.equals(ifDecId)) { lastIsIfDecision = true; break; }
+            }
+            if (!lastIsIfDecision) {
+                ControlFlow toUntilDec = UMLFactory.eINSTANCE.createControlFlow();
+                toUntilDec.setSource(MainRunner.umlNodes.get(lastBodyId));
+                toUntilDec.setTarget(untilDecision);
+                ctx.activity.getEdges().add(toUntilDec);
+            }
+        }
+
+        String exitMergeId = id + "_whileUntilExitMerge";
+        String exitMergeName = (name != null ? name : "Loop") + "_ExitMerge";
+        MergeNode exitMerge = (MergeNode) ctx.activity.createOwnedNode(exitMergeName,
+                UMLPackage.Literals.MERGE_NODE);
+        MainRunner.umlNodes.put(exitMergeId, exitMerge);
+        MainRunner.whileLoopExitMergeIds.put(id, exitMergeId);
+
+        ControlFlow whileFalseToExit = UMLFactory.eINSTANCE.createControlFlow();
+        whileFalseToExit.setSource(whileDecision);
+        whileFalseToExit.setTarget(exitMerge);
+        OpaqueExpression whileFalseGuard = UMLFactory.eINSTANCE.createOpaqueExpression();
+        whileFalseGuard.getBodies().add("else");
+        whileFalseToExit.setGuard(whileFalseGuard);
+        ctx.activity.getEdges().add(whileFalseToExit);
+
+        ControlFlow untilToExit = UMLFactory.eINSTANCE.createControlFlow();
+        untilToExit.setSource(untilDecision);
+        untilToExit.setTarget(exitMerge);
+        OpaqueExpression untilGuard = UMLFactory.eINSTANCE.createOpaqueExpression();
+        untilGuard.getBodies().add(untilCondText);
+        untilToExit.setGuard(untilGuard);
+        ctx.activity.getEdges().add(untilToExit);
+
+        ControlFlow backEdge2 = UMLFactory.eINSTANCE.createControlFlow();
+        backEdge2.setSource(untilDecision);
+        backEdge2.setTarget(merge);
+        OpaqueExpression backGuard2 = UMLFactory.eINSTANCE.createOpaqueExpression();
+        backGuard2.getBodies().add("else");
+        backEdge2.setGuard(backGuard2);
+        ctx.activity.getEdges().add(backEdge2);
+
+        System.out.println("[WHILE-UNTIL] id=" + id.substring(0, Math.min(8, id.length())) + " while="
+                + whileCondText + " until=" + untilCondText);
+    }
+
+    /** while 循环控制流: Merge -> Decision(body) -> body -> Merge(回边), Decision(else) -> ExitMerge */
+    private static void buildWhileLoopFlows(PipelineContext ctx, List<String> bodyNodeIds,
+            Map<String, String> ifDecisionIds, Map<String, String> ifMergeIds,
+            Map<String, String> ifConditionTexts, Map<String, List<String>> ifThenBranchIds,
+            MergeNode merge, DecisionNode untilDecision, String condText, String name, String id) {
+        ControlFlow mergeToDec = UMLFactory.eINSTANCE.createControlFlow();
+        mergeToDec.setSource(merge);
+        mergeToDec.setTarget(untilDecision);
+        ctx.activity.getEdges().add(mergeToDec);
+
+        String pureExitMergeId = id + "_pureWhileExitMerge";
+        String pureExitMergeName = (name != null ? name : "Loop") + "_ExitMerge";
+        MergeNode pureExitMerge = (MergeNode) ctx.activity.createOwnedNode(pureExitMergeName,
+                UMLPackage.Literals.MERGE_NODE);
+        MainRunner.umlNodes.put(pureExitMergeId, pureExitMerge);
+        MainRunner.whileLoopPureExitMergeIds.put(id, pureExitMergeId);
+
+        ControlFlow exitToMerge = UMLFactory.eINSTANCE.createControlFlow();
+        exitToMerge.setSource(untilDecision);
+        exitToMerge.setTarget(pureExitMerge);
+        OpaqueExpression exitGuard = UMLFactory.eINSTANCE.createOpaqueExpression();
+        exitGuard.getBodies().add("else");
+        exitToMerge.setGuard(exitGuard);
+        ctx.activity.getEdges().add(exitToMerge);
+
+        if (!bodyNodeIds.isEmpty()) {
+            ControlFlow trueBranch = UMLFactory.eINSTANCE.createControlFlow();
+            trueBranch.setSource(untilDecision);
+            trueBranch.setTarget(MainRunner.umlNodes.get(bodyNodeIds.get(0)));
+            OpaqueExpression trueGuard = UMLFactory.eINSTANCE.createOpaqueExpression();
+            trueGuard.getBodies().add(condText);
+            trueBranch.setGuard(trueGuard);
+            ctx.activity.getEdges().add(trueBranch);
+
+            LoopExpander.buildBodyInternalFlows(ctx.activity, bodyNodeIds, ifDecisionIds, ifMergeIds,
+                    ifConditionTexts, ifThenBranchIds, MainRunner.umlNodes, merge, null);
+
+            String lastBodyId = bodyNodeIds.get(bodyNodeIds.size() - 1);
+            boolean lastIsIfDecision = false;
+            for (String ifDecId : ifDecisionIds.values()) {
+                if (lastBodyId.equals(ifDecId)) { lastIsIfDecision = true; break; }
+            }
+            if (!lastIsIfDecision) {
+                ControlFlow backEdge = UMLFactory.eINSTANCE.createControlFlow();
+                backEdge.setSource(MainRunner.umlNodes.get(lastBodyId));
+                backEdge.setTarget(merge);
+                ctx.activity.getEdges().add(backEdge);
             }
         }
     }
@@ -1731,104 +1495,12 @@ class Pass2Nodes {
 
     /** 处理 TransitionUsage: 提取 guard 条件和目标动作, 存储延迟边 */
     private static void handleTransitionUsage(EObject obj, PipelineContext ctx) {
-        // 1. 从 TransitionFeatureMembership(kind=guard) 提取 guard 条件
-        String guardText = null;
-        for (EObject child : obj.eContents()) {
-            if (child.eClass().getName().equals("TransitionFeatureMembership")) {
-                String kind = ExpressionUtils.getFeatureString(child, "kind");
-                if ("guard".equals(kind)) {
-                    for (EObject expr : child.eContents()) {
-                        if (expr.eClass().getName().contains("OperatorExpression")) {
-                            guardText = ExpressionUtils.buildExpressionText(expr);
-                            if (guardText != null && !guardText.isEmpty()
-                                    && ExpressionUtils.isValidExpression(guardText)) {
-                                break;
-                            }
-                            guardText = null;
-                        }
-                    }
-                }
-            }
-            if (guardText != null) {
-                break;
-            }
-        }
-        // Fallback: .sysml regex 按序提取条件
-        if (guardText == null || guardText.isEmpty()) {
-            try {
-                String text = Files.readString(Paths.get(ctx.sysmlBasePath.replace(".sysmlx", ".sysml")));
-                Matcher m = Pattern.compile("if\\s+(.+?)\\s+then\\b").matcher(text);
-                int count = 0;
-                while (m.find()) {
-                    if (count == ctx.decideDeferredEdges.size()) {
-                        guardText = m.group(1).trim();
-                        break;
-                    }
-                    count++;
-                }
-            } catch (Exception ignored) {
-                // ignored
-            }
-        }
-        // 2. 确定目标动作名: 按文档顺序, 第 N 个 TransitionUsage 对应第 N 个 if...then 目标
-        String targetName = null;
-        if (!ctx.sysmlIfTargets.isEmpty()) {
-            int currentIdx = ctx.decideDeferredEdges.size();
-            if (currentIdx < ctx.sysmlIfTargets.size()) {
-                targetName = ctx.sysmlIfTargets.get(currentIdx);
-            }
-        }
-        // 2b. Fallback: extract target directly from XMI
-        String condSuccTgtId = null; // direct XMI target ID
-        if (targetName == null) {
-            for (EObject mChild : obj.eContents()) {
-                if (mChild.eClass().getName().equals("OwningMembership")) {
-                    for (EObject succ : mChild.eContents()) {
-                        if (succ.eClass().getName().equals("SuccessionAsUsage")) {
-                            int endIdx = 0;
-                            for (EObject efm : succ.eContents()) {
-                                if (efm.eClass().getName().equals("EndFeatureMembership")) {
-                                    if (endIdx == 1) { // second end = target
-                                        for (EObject ref : efm.eContents()) {
-                                            if (ref.eClass().getName().contains("ReferenceUsage")) {
-                                                for (EObject rs : ref.eContents()) {
-                                                    if (rs.eClass().getName().equals("ReferenceSubsetting")) {
-                                                        try {
-                                                            var rfFeat = rs.eClass()
-                                                                    .getEStructuralFeature("referencedFeature");
-                                                            if (rfFeat != null) {
-                                                                Object rfVal = rs.eGet(rfFeat);
-                                                                if (rfVal instanceof EObject) {
-                                                                    rfVal = EcoreUtil.resolve((EObject) rfVal,
-                                                                            ctx.resourceSet);
-                                                                    if (rfVal instanceof org.omg.sysml.lang.sysml.Element) {
-                                                                        condSuccTgtId = ((org.omg.sysml.lang.sysml.Element) rfVal)
-                                                                                .getElementId();
-                                                                        targetName = ((org.omg.sysml.lang.sysml.Element) rfVal)
-                                                                                .getDeclaredName();
-                                                                        System.out.println(
-                                                                                "[DEBUG] TransitionUsage: XMI target = "
-                                                                                        + targetName + " (id="
-                                                                                        + condSuccTgtId + ")");
-                                                                    }
-                                                                }
-                                                            }
-                                                        } catch (Exception ignored) {
-                                                            // ignored
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    endIdx++;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        // 1. 提取 guard 条件
+        String guardText = extractTransitionGuard(obj, ctx);
+        // 2. 确定目标动作名
+        String[] targetResult = resolveTransitionTarget(obj, ctx);
+        String targetName = targetResult[0];
+        String condSuccTgtId = targetResult[1];
         // 3. 验证 guard 文本: 检测 Java toString() 垃圾 (EMF 代理对象)
         if (guardText != null && (guardText.contains("org.omg") || guardText.contains("@")
                 || guardText.contains("FeatureReference") || guardText.contains("Impl@"))) {
@@ -2118,6 +1790,98 @@ class Pass2Nodes {
                 + "." + tgtPinName);
     }
 
+    /** BindingConnectorAsUsage: 记录 bind 两端 pin 信息, 后续创建 ObjectFlow */
+    private static void handleBindingConnectorInStructural(EObject obj, PipelineContext ctx) {
+        List<String> endFeatureIds = new ArrayList<>();
+        for (EObject rel : obj.eContents()) {
+            if (rel.eClass().getName().equals("EndFeatureMembership")) {
+                for (EObject refUsage : rel.eContents()) {
+                    String refCn = refUsage.eClass().getName();
+                    if (refCn.contains("ReferenceUsage") || refCn.contains("Feature")) {
+                        for (EObject sub : refUsage.eContents()) {
+                            if (sub.eClass().getName().equals("ReferenceSubsetting")) {
+                                EStructuralFeature rfFeat = sub.eClass()
+                                        .getEStructuralFeature("referencedFeature");
+                                if (rfFeat != null) {
+                                    Object refObj = sub.eGet(rfFeat);
+                                    if (refObj instanceof EObject) {
+                                        EObject resolved = EcoreUtil.resolve((EObject) refObj, sub);
+                                        if (resolved instanceof org.omg.sysml.lang.sysml.Element) {
+                                            String refId = ((org.omg.sysml.lang.sysml.Element) resolved)
+                                                    .getElementId();
+                                            if (refId != null) {
+                                                endFeatureIds.add(refId);
+                                            }
+                                        }
+                                    }
+                                }
+                                String lastChainId = null;
+                                for (EObject fc : sub.eContents()) {
+                                    if (fc.eClass().getName().equals("Feature")) {
+                                        for (EObject fcc : fc.eContents()) {
+                                            if (fcc.eClass().getName().equals("FeatureChaining")) {
+                                                try {
+                                                    EStructuralFeature cfFeat = fcc.eClass()
+                                                            .getEStructuralFeature("chainingFeature");
+                                                    if (cfFeat != null) {
+                                                        Object cfVal = fcc.eGet(cfFeat);
+                                                        if (cfVal instanceof EObject) {
+                                                            EObject cfResolved = EcoreUtil.resolve((EObject) cfVal, fcc);
+                                                            if (cfResolved instanceof org.omg.sysml.lang.sysml.Element) {
+                                                                lastChainId = ((org.omg.sysml.lang.sysml.Element) cfResolved)
+                                                                        .getElementId();
+                                                            }
+                                                        }
+                                                    }
+                                                } catch (Exception ignored) {}
+                                            }
+                                        }
+                                        try {
+                                            String fcId = ((org.omg.sysml.lang.sysml.Element) fc).getElementId();
+                                            if (fcId != null && lastChainId == null) {
+                                                lastChainId = fcId;
+                                            }
+                                        } catch (Exception ignored) {}
+                                    }
+                                }
+                                if (lastChainId != null && !endFeatureIds.contains(lastChainId)) {
+                                    endFeatureIds.add(lastChainId);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (endFeatureIds.size() >= 2) {
+            String[] end1 = ctx.featureIdToPinInfo.get(endFeatureIds.get(0));
+            String[] end2 = ctx.featureIdToPinInfo.get(endFeatureIds.get(1));
+            if (end1 == null && endFeatureIds.size() > 2) {
+                for (String eid : endFeatureIds.subList(2, endFeatureIds.size())) {
+                    end1 = ctx.featureIdToPinInfo.get(eid);
+                    if (end1 != null) break;
+                }
+            }
+            if (end2 == null && endFeatureIds.size() > 2) {
+                for (String eid : endFeatureIds.subList(2, endFeatureIds.size())) {
+                    end2 = ctx.featureIdToPinInfo.get(eid);
+                    if (end2 != null) break;
+                }
+            }
+            if (end1 != null && end2 != null) {
+                ctx.bindConnectorBindings.add(new String[]{end1[0], end1[1], end2[0], end2[1]});
+            }
+        }
+        // 提取 id 并注册
+        String bcId = null;
+        try {
+            bcId = ((org.omg.sysml.lang.sysml.Element) obj).getElementId();
+        } catch (Exception ignored) {}
+        if (bcId != null) {
+            ctx.processedStructuralIds.add(bcId);
+        }
+    }
+
     /** 处理结构概念: PartDefinition, ItemDefinition, PortDefinition, etc. */
     private static void handleStructuralElements(EObject obj, String id, String name, String className,
             PipelineContext ctx) {
@@ -2145,110 +1909,7 @@ class Pass2Nodes {
         }
         // BindingConnectorAsUsage -> 记录 bind 两端 pin 信息, 后续创建 ObjectFlow
         else if (className.contains("BindingConnector")) {
-            List<String> endFeatureIds = new ArrayList<>();
-            for (EObject rel : obj.eContents()) {
-                if (rel.eClass().getName().equals("EndFeatureMembership")) {
-                    for (EObject refUsage : rel.eContents()) {
-                        String refCn = refUsage.eClass().getName();
-                        if (refCn.contains("ReferenceUsage") || refCn.contains("Feature")) {
-                            for (EObject sub : refUsage.eContents()) {
-                                if (sub.eClass().getName().equals("ReferenceSubsetting")) {
-                                    // 1. 尝试直接 referencedFeature 引用
-                                    EStructuralFeature rfFeat = sub.eClass().getEStructuralFeature("referencedFeature");
-                                    if (rfFeat != null) {
-                                        Object refObj = sub.eGet(rfFeat);
-                                        if (refObj instanceof EObject) {
-                                            EObject resolved = EcoreUtil.resolve((EObject) refObj, sub);
-                                            if (resolved instanceof org.omg.sysml.lang.sysml.Element) {
-                                                String refId = ((org.omg.sysml.lang.sysml.Element) resolved)
-                                                        .getElementId();
-                                                if (refId != null)
-                                                    endFeatureIds.add(refId);
-                                            }
-                                        }
-                                    }
-                                    // 2. FeatureChaining: 取最后一个 chainingFeature 作为实际参数 ID
-                                    String lastChainId = null;
-                                    for (EObject fc : sub.eContents()) {
-                                        if (fc.eClass().getName().equals("Feature")) {
-                                            for (EObject fcc : fc.eContents()) {
-                                                if (fcc.eClass().getName().equals("FeatureChaining")) {
-                                                    try {
-                                                        EStructuralFeature cfFeat = fcc.eClass()
-                                                                .getEStructuralFeature("chainingFeature");
-                                                        if (cfFeat != null) {
-                                                            Object cfVal = fcc.eGet(cfFeat);
-                                                            if (cfVal instanceof EObject) {
-                                                                EObject cfResolved = EcoreUtil.resolve((EObject) cfVal,
-                                                                        fcc);
-                                                                if (cfResolved instanceof org.omg.sysml.lang.sysml.Element) {
-                                                                    lastChainId = ((org.omg.sysml.lang.sysml.Element) cfResolved)
-                                                                            .getElementId();
-                                                                }
-                                                            }
-                                                        }
-                                                    } catch (Exception ignored) {
-                                                        // ignored
-                                                    }
-                                                }
-                                            }
-                                            // Feature 自身的 elementId 也作为备选
-                                            try {
-                                                String fcId = ((org.omg.sysml.lang.sysml.Element) fc).getElementId();
-                                                if (fcId != null && lastChainId == null)
-                                                    lastChainId = fcId;
-                                            } catch (Exception ignored) {
-                                                // ignored
-                                            }
-                                        }
-                                    }
-                                    if (lastChainId != null && !endFeatureIds.contains(lastChainId)) {
-                                        endFeatureIds.add(lastChainId);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            if (endFeatureIds.size() >= 2) {
-                String[] end1 = ctx.featureIdToPinInfo.get(endFeatureIds.get(0));
-                String[] end2 = ctx.featureIdToPinInfo.get(endFeatureIds.get(1));
-                // 如果有多个候选 ID, 尝试匹配
-                if (end1 == null && endFeatureIds.size() > 2) {
-                    for (String eid : endFeatureIds.subList(2, endFeatureIds.size())) {
-                        end1 = ctx.featureIdToPinInfo.get(eid);
-                        if (end1 != null) {
-                            break;
-                        }
-                    }
-                }
-                if (end2 == null && endFeatureIds.size() > 2) {
-                    for (String eid : endFeatureIds.subList(2, endFeatureIds.size())) {
-                        end2 = ctx.featureIdToPinInfo.get(eid);
-                        if (end2 != null) {
-                            break;
-                        }
-                    }
-                }
-                if (end1 != null && end2 != null) {
-                    ctx.bindConnectorBindings.add(new String[]{end1[0], end1[1], end2[0], end2[1]});
-                    System.out.println("[BIND] " + end1[1] + " <-> " + end2[1] + " (action1="
-                            + end1[0].substring(0, Math.min(8, end1[0].length())) + " action2="
-                            + end2[0].substring(0, Math.min(8, end2[0].length())) + ")");
-                } else {
-                    if (end2 != null && end1 == null) {
-                        System.out.println("[BIND WARN] End1 unresolved: " + endFeatureIds.get(0));
-                    }
-                    if (end1 != null && end2 == null) {
-                        System.out.println("[BIND WARN] End2 unresolved: " + endFeatureIds.get(1));
-                    }
-                    if (end1 == null && end2 == null) {
-                        System.out.println("[BIND WARN] Both ends unresolved: " + endFeatureIds.get(0) + ", "
-                                + endFeatureIds.get(1));
-                    }
-                }
-            }
+            handleBindingConnectorInStructural(obj, ctx);
         }
         // PartDefinition -> UML Class
         else if ("PartDefinition".equals(className) || "ItemDefinition".equals(className)
@@ -2260,114 +1921,15 @@ class Pass2Nodes {
                 || "VerificationCaseDefinition".equals(className) || "AnalysisCaseDefinition".equals(className)
                 || "CaseDefinition".equals(className) || "MetadataDefinition".equals(className)
                 || "PortDefinition".equals(className) || "ConjugatedPortDefinition".equals(className)) {
-
-            org.eclipse.uml2.uml.Class umlClass = (org.eclipse.uml2.uml.Class) ctx.umlModel
-                    .createPackagedElement(structName, UMLPackage.Literals.CLASS);
-            // 添加 SysML 类型注释
-            org.eclipse.uml2.uml.Comment comment = ctx.factory.createComment();
-            comment.setBody("SysML: " + className);
-            umlClass.getOwnedComments().add(comment);
-            ctx.structuralElements.add(umlClass);
-            ctx.processedStructuralIds.add(id);
-            MainRunner.nameToIdMap.put(structName, id);
-
-            // 提取属性 (FeatureMembership ->
-            // AttributeUsage/ReferenceUsage/PartUsage/PortUsage/ItemUsage)
-            for (EObject child : obj.eContents()) {
-                if (child.eClass().getName().equals("FeatureMembership")) {
-                    for (EObject attr : child.eContents()) {
-                        String attrCn = attr.eClass().getName();
-                        if (attrCn.contains("AttributeUsage") || attrCn.contains("ReferenceUsage")
-                                || attrCn.contains("PartUsage") || attrCn.contains("PortUsage")
-                                || attrCn.contains("ItemUsage") || attrCn.contains("ConnectionUsage")
-                                || attrCn.contains("FlowUsage") || attrCn.contains("AllocationUsage")) {
-                            String attrName = null;
-                            if (attr instanceof org.omg.sysml.lang.sysml.Element) {
-                                attrName = ((org.omg.sysml.lang.sysml.Element) attr).getDeclaredName();
-                            }
-                            if (attrName != null && !attrName.isEmpty()) {
-                                org.eclipse.uml2.uml.Property prop = ctx.factory.createProperty();
-                                prop.setName(attrName);
-                                umlClass.getOwnedAttributes().add(prop);
-                            }
-                        }
-                    }
-                }
-            }
+            handlePartDefinition(obj, id, structName, className, ctx);
         }
-        // EnumerationDefinition -> UML Enumeration (DataType with literals)
+        // EnumerationDefinition -> UML Enumeration
         else if ("EnumerationDefinition".equals(className)) {
-            org.eclipse.uml2.uml.Enumeration enumDt = (org.eclipse.uml2.uml.Enumeration) ctx.umlModel
-                    .createPackagedElement(structName, UMLPackage.Literals.ENUMERATION);
-            // Extract enum literals from VariantMembership -> EnumerationUsage
-            for (EObject child : obj.eContents()) {
-                String childCn = child.eClass().getName();
-                if ("VariantMembership".equals(childCn)) {
-                    for (EObject lit : child.eContents()) {
-                        if (lit.eClass().getName().equals("EnumerationUsage")
-                                || lit.eClass().getName().contains("EnumerationUsage")) {
-                            String litName = null;
-                            if (lit instanceof org.omg.sysml.lang.sysml.Element) {
-                                litName = ((org.omg.sysml.lang.sysml.Element) lit).getDeclaredName();
-                            }
-                            if (litName != null && !litName.isEmpty()) {
-                                org.eclipse.uml2.uml.EnumerationLiteral enumLit = ctx.factory
-                                        .createEnumerationLiteral();
-                                enumLit.setName(litName);
-                                enumDt.getOwnedLiterals().add(enumLit);
-                            }
-                        }
-                    }
-                }
-                // Also check direct FeatureMembership for named enum values (e.g., A = 4.0)
-                if ("FeatureMembership".equals(childCn)) {
-                    for (EObject lit : child.eContents()) {
-                        String litCn = lit.eClass().getName();
-                        if (litCn.contains("EnumerationUsage") || litCn.contains("AttributeUsage")) {
-                            String litName = null;
-                            if (lit instanceof org.omg.sysml.lang.sysml.Element) {
-                                litName = ((org.omg.sysml.lang.sysml.Element) lit).getDeclaredName();
-                            }
-                            if (litName != null && !litName.isEmpty()) {
-                                org.eclipse.uml2.uml.EnumerationLiteral enumLit = ctx.factory
-                                        .createEnumerationLiteral();
-                                enumLit.setName(litName);
-                                enumDt.getOwnedLiterals().add(enumLit);
-                            }
-                        }
-                    }
-                }
-            }
-            ctx.structuralElements.add(enumDt);
-            ctx.processedStructuralIds.add(id);
-            MainRunner.nameToIdMap.put(structName, id);
+            handleEnumerationDefinition(obj, id, structName, ctx);
         }
-        // AttributeDefinition -> UML DataType with attributes
+        // AttributeDefinition -> UML DataType
         else if ("AttributeDefinition".equals(className)) {
-            org.eclipse.uml2.uml.DataType dt = (org.eclipse.uml2.uml.DataType) ctx.umlModel
-                    .createPackagedElement(structName, UMLPackage.Literals.DATA_TYPE);
-            // Extract attributes from FeatureMembership -> AttributeUsage/ReferenceUsage
-            for (EObject child : obj.eContents()) {
-                if (child.eClass().getName().equals("FeatureMembership")) {
-                    for (EObject attr : child.eContents()) {
-                        String attrCn = attr.eClass().getName();
-                        if (attrCn.contains("AttributeUsage") || attrCn.contains("ReferenceUsage")) {
-                            String attrName = null;
-                            if (attr instanceof org.omg.sysml.lang.sysml.Element) {
-                                attrName = ((org.omg.sysml.lang.sysml.Element) attr).getDeclaredName();
-                            }
-                            if (attrName != null && !attrName.isEmpty()) {
-                                org.eclipse.uml2.uml.Property prop = ctx.factory.createProperty();
-                                prop.setName(attrName);
-                                dt.getOwnedAttributes().add(prop);
-                            }
-                        }
-                    }
-                }
-            }
-            ctx.structuralElements.add(dt);
-            ctx.processedStructuralIds.add(id);
-            MainRunner.nameToIdMap.put(structName, id);
+            handleAttributeDefinition(obj, id, structName, ctx);
         }
         // ConstraintDefinition -> UML Class (with constraint stereotype)
         else if ("ConstraintDefinition".equals(className)) {
@@ -2380,51 +1942,665 @@ class Pass2Nodes {
             ctx.processedStructuralIds.add(id);
             MainRunner.nameToIdMap.put(structName, id);
         }
-        // StateDefinition -> UML StateMachine with States and Transitions
+        // StateDefinition -> UML StateMachine
         else if ("StateDefinition".equals(className)) {
-            org.eclipse.uml2.uml.StateMachine sm = (org.eclipse.uml2.uml.StateMachine) ctx.umlModel
-                    .createPackagedElement(structName, UMLPackage.Literals.STATE_MACHINE);
-            ctx.structuralElements.add(sm);
-            ctx.processedStructuralIds.add(id);
-            MainRunner.nameToIdMap.put(structName, id);
+            handleStateDefinition(obj, id, structName, ctx);
+        }
+        // CalculationDefinition -> UML Class
+        else if ("CalculationDefinition".equals(className)) {
+            handleCalculationDefinition(id, structName, ctx);
+        }
+    }
 
-            // Create a Region to hold the states
-            org.eclipse.uml2.uml.Region region = ctx.factory.createRegion();
-            sm.getRegions().add(region);
+    /** PartDefinition/ItemDefinition/PortDefinition 等 -> UML Class */
+    private static void handlePartDefinition(EObject obj, String id, String structName, String className,
+            PipelineContext ctx) {
+        org.eclipse.uml2.uml.Class umlClass = (org.eclipse.uml2.uml.Class) ctx.umlModel
+                .createPackagedElement(structName, UMLPackage.Literals.CLASS);
+        // 添加 SysML 类型注释
+        org.eclipse.uml2.uml.Comment comment = ctx.factory.createComment();
+        comment.setBody("SysML: " + className);
+        umlClass.getOwnedComments().add(comment);
+        ctx.structuralElements.add(umlClass);
+        ctx.processedStructuralIds.add(id);
+        MainRunner.nameToIdMap.put(structName, id);
 
-            // Collect StateUsage children: stateId -> stateName
-            Map<String, String> stateIdToName = new HashMap<>();
-            Map<String, org.eclipse.uml2.uml.State> stateNameToUml = new HashMap<>();
-            // TransitionUsage data: [srcStateId, tgtStateId, triggerTypeName]
-            List<String[]> stateTransitions = new ArrayList<>();
-            // Initial succession target: stateId
-            String initialStateId = null;
+        // 提取属性 (FeatureMembership -> AttributeUsage/ReferenceUsage/PartUsage/PortUsage/ItemUsage)
+        for (EObject child : obj.eContents()) {
+            if (child.eClass().getName().equals("FeatureMembership")) {
+                for (EObject attr : child.eContents()) {
+                    String attrCn = attr.eClass().getName();
+                    if (attrCn.contains("AttributeUsage") || attrCn.contains("ReferenceUsage")
+                            || attrCn.contains("PartUsage") || attrCn.contains("PortUsage")
+                            || attrCn.contains("ItemUsage") || attrCn.contains("ConnectionUsage")
+                            || attrCn.contains("FlowUsage") || attrCn.contains("AllocationUsage")) {
+                        String attrName = null;
+                        if (attr instanceof org.omg.sysml.lang.sysml.Element) {
+                            attrName = ((org.omg.sysml.lang.sysml.Element) attr).getDeclaredName();
+                        }
+                        if (attrName != null && !attrName.isEmpty()) {
+                            org.eclipse.uml2.uml.Property prop = ctx.factory.createProperty();
+                            prop.setName(attrName);
+                            umlClass.getOwnedAttributes().add(prop);
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-            for (EObject child : obj.eContents()) {
-                String childCn = child.eClass().getName();
-                if ("FeatureMembership".equals(childCn)) {
-                    for (EObject inner : child.eContents()) {
-                        String innerCn = inner.eClass().getName();
+    /** EnumerationDefinition -> UML Enumeration (DataType with literals) */
+    private static void handleEnumerationDefinition(EObject obj, String id, String structName, PipelineContext ctx) {
+        org.eclipse.uml2.uml.Enumeration enumDt = (org.eclipse.uml2.uml.Enumeration) ctx.umlModel
+                .createPackagedElement(structName, UMLPackage.Literals.ENUMERATION);
+        // Extract enum literals from VariantMembership -> EnumerationUsage
+        for (EObject child : obj.eContents()) {
+            String childCn = child.eClass().getName();
+            if ("VariantMembership".equals(childCn)) {
+                for (EObject lit : child.eContents()) {
+                    if (lit.eClass().getName().equals("EnumerationUsage")
+                            || lit.eClass().getName().contains("EnumerationUsage")) {
+                        String litName = null;
+                        if (lit instanceof org.omg.sysml.lang.sysml.Element) {
+                            litName = ((org.omg.sysml.lang.sysml.Element) lit).getDeclaredName();
+                        }
+                        if (litName != null && !litName.isEmpty()) {
+                            org.eclipse.uml2.uml.EnumerationLiteral enumLit = ctx.factory.createEnumerationLiteral();
+                            enumLit.setName(litName);
+                            enumDt.getOwnedLiterals().add(enumLit);
+                        }
+                    }
+                }
+            }
+            // Also check direct FeatureMembership for named enum values (e.g., A = 4.0)
+            if ("FeatureMembership".equals(childCn)) {
+                for (EObject lit : child.eContents()) {
+                    String litCn = lit.eClass().getName();
+                    if (litCn.contains("EnumerationUsage") || litCn.contains("AttributeUsage")) {
+                        String litName = null;
+                        if (lit instanceof org.omg.sysml.lang.sysml.Element) {
+                            litName = ((org.omg.sysml.lang.sysml.Element) lit).getDeclaredName();
+                        }
+                        if (litName != null && !litName.isEmpty()) {
+                            org.eclipse.uml2.uml.EnumerationLiteral enumLit = ctx.factory.createEnumerationLiteral();
+                            enumLit.setName(litName);
+                            enumDt.getOwnedLiterals().add(enumLit);
+                        }
+                    }
+                }
+            }
+        }
+        ctx.structuralElements.add(enumDt);
+        ctx.processedStructuralIds.add(id);
+        MainRunner.nameToIdMap.put(structName, id);
+    }
 
-                        // StateUsage -> record state
-                        if ("StateUsage".equals(innerCn)) {
-                            String sName = null;
-                            String sId = null;
-                            if (inner instanceof org.omg.sysml.lang.sysml.Element) {
-                                sName = ((org.omg.sysml.lang.sysml.Element) inner).getDeclaredName();
-                                sId = ((org.omg.sysml.lang.sysml.Element) inner).getElementId();
-                            }
-                            if (sName != null && sId != null) {
-                                stateIdToName.put(sId, sName);
+    /** AttributeDefinition -> UML DataType with attributes */
+    private static void handleAttributeDefinition(EObject obj, String id, String structName, PipelineContext ctx) {
+        org.eclipse.uml2.uml.DataType dt = (org.eclipse.uml2.uml.DataType) ctx.umlModel
+                .createPackagedElement(structName, UMLPackage.Literals.DATA_TYPE);
+        // Extract attributes from FeatureMembership -> AttributeUsage/ReferenceUsage
+        for (EObject child : obj.eContents()) {
+            if (child.eClass().getName().equals("FeatureMembership")) {
+                for (EObject attr : child.eContents()) {
+                    String attrCn = attr.eClass().getName();
+                    if (attrCn.contains("AttributeUsage") || attrCn.contains("ReferenceUsage")) {
+                        String attrName = null;
+                        if (attr instanceof org.omg.sysml.lang.sysml.Element) {
+                            attrName = ((org.omg.sysml.lang.sysml.Element) attr).getDeclaredName();
+                        }
+                        if (attrName != null && !attrName.isEmpty()) {
+                            org.eclipse.uml2.uml.Property prop = ctx.factory.createProperty();
+                            prop.setName(attrName);
+                            dt.getOwnedAttributes().add(prop);
+                        }
+                    }
+                }
+            }
+        }
+        ctx.structuralElements.add(dt);
+        ctx.processedStructuralIds.add(id);
+        MainRunner.nameToIdMap.put(structName, id);
+    }
+
+    /** StateDefinition -> UML StateMachine with States and Transitions */
+    private static void handleStateDefinition(EObject obj, String id, String structName, PipelineContext ctx) {
+        org.eclipse.uml2.uml.StateMachine sm = (org.eclipse.uml2.uml.StateMachine) ctx.umlModel
+                .createPackagedElement(structName, UMLPackage.Literals.STATE_MACHINE);
+        ctx.structuralElements.add(sm);
+        ctx.processedStructuralIds.add(id);
+        MainRunner.nameToIdMap.put(structName, id);
+
+        // Create a Region to hold the states
+        org.eclipse.uml2.uml.Region region = ctx.factory.createRegion();
+        sm.getRegions().add(region);
+
+        // Collect StateUsage children: stateId -> stateName
+        Map<String, String> stateIdToName = new HashMap<>();
+        Map<String, org.eclipse.uml2.uml.State> stateNameToUml = new HashMap<>();
+        // TransitionUsage data: [srcStateId, tgtStateId, triggerTypeName]
+        List<String[]> stateTransitions = new ArrayList<>();
+        // Initial succession target: stateId
+        String initialStateId = null;
+
+        for (EObject child : obj.eContents()) {
+            String childCn = child.eClass().getName();
+            if ("FeatureMembership".equals(childCn)) {
+                for (EObject inner : child.eContents()) {
+                    String innerCn = inner.eClass().getName();
+
+                    // StateUsage -> record state
+                    if ("StateUsage".equals(innerCn)) {
+                        String sName = null;
+                        String sId = null;
+                        if (inner instanceof org.omg.sysml.lang.sysml.Element) {
+                            sName = ((org.omg.sysml.lang.sysml.Element) inner).getDeclaredName();
+                            sId = ((org.omg.sysml.lang.sysml.Element) inner).getElementId();
+                        }
+                        if (sName != null && sId != null) {
+                            stateIdToName.put(sId, sName);
+                        }
+                    }
+                    // SuccessionAsUsage -> initial transition ("first start then X")
+                    else if ("SuccessionAsUsage".equals(innerCn)) {
+                        int endIdx = 0;
+                        for (EObject efm : inner.eContents()) {
+                            if (efm.eClass().getName().equals("EndFeatureMembership")) {
+                                if (endIdx == 1) {
+                                    for (EObject ref : efm.eContents()) {
+                                        if (ref.eClass().getName().contains("ReferenceUsage")) {
+                                            for (EObject rs : ref.eContents()) {
+                                                if (rs.eClass().getName().equals("ReferenceSubsetting")) {
+                                                    try {
+                                                        var rfFeat = rs.eClass()
+                                                                .getEStructuralFeature("referencedFeature");
+                                                        if (rfFeat != null) {
+                                                            Object rfVal = rs.eGet(rfFeat);
+                                                            if (rfVal instanceof EObject) {
+                                                                initialStateId = ((org.omg.sysml.lang.sysml.Element) rfVal)
+                                                                        .getElementId();
+                                                            }
+                                                        }
+                                                    } catch (Exception ignored) {}
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                endIdx++;
                             }
                         }
-                        // SuccessionAsUsage -> initial transition ("first start then X")
-                        else if ("SuccessionAsUsage".equals(innerCn)) {
-                            // Extract target from second EndFeatureMembership
+                    }
+                    // TransitionUsage -> record transition data
+                    else if ("TransitionUsage".equals(innerCn)) {
+                        String srcStateId = null;
+                        String tgtStateId = null;
+                        String triggerTypeName = null;
+
+                        for (EObject tc : inner.eContents()) {
+                            String tcCn = tc.eClass().getName();
+                            // Source: Membership.memberElement -> StateUsage
+                            if ("Membership".equals(tcCn) && !tcCn.contains("End") && !tcCn.contains("Parameter")
+                                    && !tcCn.contains("Owning")) {
+                                try {
+                                    var meFeat = tc.eClass().getEStructuralFeature("memberElement");
+                                    if (meFeat != null) {
+                                        Object meVal = tc.eGet(meFeat);
+                                        if (meVal instanceof EObject) {
+                                            srcStateId = ((org.omg.sysml.lang.sysml.Element) meVal).getElementId();
+                                        }
+                                    }
+                                } catch (Exception ignored) {}
+                            }
+                            // Trigger: TransitionFeatureMembership(kind=trigger) ->
+                            // AcceptActionUsage -> ParameterMembership -> ReferenceUsage -> FeatureTyping
+                            if ("TransitionFeatureMembership".equals(tcCn)) {
+                                String kind = ExpressionUtils.getFeatureString(tc, "kind");
+                                if ("trigger".equals(kind)) {
+                                    for (EObject acu : tc.eContents()) {
+                                        if (acu.eClass().getName().equals("AcceptActionUsage")) {
+                                            for (EObject pm : acu.eContents()) {
+                                                if (pm.eClass().getName().equals("ParameterMembership")) {
+                                                    for (EObject ru : pm.eContents()) {
+                                                        if (ru.eClass().getName().contains("ReferenceUsage")) {
+                                                            for (EObject ft : ru.eContents()) {
+                                                                if (ft.eClass().getName().equals("FeatureTyping")) {
+                                                                    try {
+                                                                        var typeFeat = ft.eClass()
+                                                                                .getEStructuralFeature("type");
+                                                                        if (typeFeat != null) {
+                                                                            Object typeVal = ft.eGet(typeFeat);
+                                                                            if (typeVal instanceof EObject) {
+                                                                                triggerTypeName = ((org.omg.sysml.lang.sysml.Element) typeVal)
+                                                                                        .getDeclaredName();
+                                                                            }
+                                                                        }
+                                                                    } catch (Exception ignored) {}
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            // Target: OwningMembership -> SuccessionAsUsage -> second EndFeatureMembership
+                            if ("OwningMembership".equals(tcCn)) {
+                                for (EObject succ : tc.eContents()) {
+                                    if (succ.eClass().getName().equals("SuccessionAsUsage")) {
+                                        int tEndIdx = 0;
+                                        for (EObject efm : succ.eContents()) {
+                                            if (efm.eClass().getName().equals("EndFeatureMembership")) {
+                                                if (tEndIdx == 1) {
+                                                    for (EObject ref : efm.eContents()) {
+                                                        if (ref.eClass().getName().contains("ReferenceUsage")) {
+                                                            for (EObject rs : ref.eContents()) {
+                                                                if (rs.eClass().getName()
+                                                                        .equals("ReferenceSubsetting")) {
+                                                                    try {
+                                                                        var rfFeat = rs.eClass()
+                                                                                .getEStructuralFeature("referencedFeature");
+                                                                        if (rfFeat != null) {
+                                                                            Object rfVal = rs.eGet(rfFeat);
+                                                                            if (rfVal instanceof EObject) {
+                                                                                tgtStateId = ((org.omg.sysml.lang.sysml.Element) rfVal)
+                                                                                        .getElementId();
+                                                                            }
+                                                                        }
+                                                                    } catch (Exception ignored) {}
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                tEndIdx++;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (srcStateId != null && tgtStateId != null) {
+                            stateTransitions.add(new String[]{srcStateId, tgtStateId, triggerTypeName});
+                        }
+                    }
+                }
+            }
+        }
+
+        // Create UML States
+        for (Map.Entry<String, String> entry : stateIdToName.entrySet()) {
+            org.eclipse.uml2.uml.State state = ctx.factory.createState();
+            state.setName(entry.getValue());
+            region.getSubvertices().add(state);
+            stateNameToUml.put(entry.getValue(), state);
+        }
+
+        // Create Initial Pseudostate and transition to initial state
+        if (initialStateId != null && stateIdToName.containsKey(initialStateId)) {
+            org.eclipse.uml2.uml.Pseudostate ps = ctx.factory.createPseudostate();
+            ps.setName("Initial");
+            ps.setKind(org.eclipse.uml2.uml.PseudostateKind.INITIAL_LITERAL);
+            region.getSubvertices().add(ps);
+            String initName = stateIdToName.get(initialStateId);
+            org.eclipse.uml2.uml.State initState = stateNameToUml.get(initName);
+            if (initState != null) {
+                org.eclipse.uml2.uml.Transition initTrans = ctx.factory.createTransition();
+                initTrans.setSource(ps);
+                initTrans.setTarget(initState);
+                region.getTransitions().add(initTrans);
+            }
+        }
+
+        // Create Transitions with Triggers
+        Map<String, org.eclipse.uml2.uml.Signal> signalMap = new HashMap<>();
+        for (String[] trans : stateTransitions) {
+            String srcName = stateIdToName.get(trans[0]);
+            String tgtName = stateIdToName.get(trans[1]);
+            String triggerName = trans[2];
+            org.eclipse.uml2.uml.State srcState = srcName != null ? stateNameToUml.get(srcName) : null;
+            org.eclipse.uml2.uml.State tgtState = tgtName != null ? stateNameToUml.get(tgtName) : null;
+            if (srcState != null && tgtState != null) {
+                org.eclipse.uml2.uml.Transition umlTrans = ctx.factory.createTransition();
+                umlTrans.setSource(srcState);
+                umlTrans.setTarget(tgtState);
+                // Create trigger with SignalEvent
+                if (triggerName != null && !triggerName.isEmpty()) {
+                    org.eclipse.uml2.uml.Signal sig = signalMap.get(triggerName);
+                    if (sig == null) {
+                        sig = (org.eclipse.uml2.uml.Signal) ctx.umlModel.createPackagedElement(triggerName,
+                                UMLPackage.Literals.SIGNAL);
+                        signalMap.put(triggerName, sig);
+                    }
+                    org.eclipse.uml2.uml.SignalEvent sigEvent = ctx.factory.createSignalEvent();
+                    sigEvent.setName(triggerName + "_Event");
+                    sigEvent.setSignal(sig);
+                    ctx.umlModel.getPackagedElements().add(sigEvent);
+                    org.eclipse.uml2.uml.Trigger trigger = ctx.factory.createTrigger();
+                    trigger.setName(triggerName + "_Trigger");
+                    trigger.setEvent(sigEvent);
+                    umlTrans.getTriggers().add(trigger);
+                }
+                region.getTransitions().add(umlTrans);
+            }
+        }
+    }
+
+    /** CalculationDefinition (non-action calc) -> UML Class */
+    private static void handleCalculationDefinition(String id, String structName, PipelineContext ctx) {
+        org.eclipse.uml2.uml.Class umlClass = (org.eclipse.uml2.uml.Class) ctx.umlModel
+                .createPackagedElement(structName, UMLPackage.Literals.CLASS);
+        org.eclipse.uml2.uml.Comment comment = ctx.factory.createComment();
+        comment.setBody("SysML: CalculationDefinition");
+        umlClass.getOwnedComments().add(comment);
+        ctx.structuralElements.add(umlClass);
+        ctx.processedStructuralIds.add(id);
+        MainRunner.nameToIdMap.put(structName, id);
+    }
+
+    // ======== Task 4: handleForLoopActionUsage helper methods ========
+
+    /** 提取 ForLoop 的循环变量名和范围表达式 */
+    private static String[] extractForLoopVarAndRange(EObject obj) {
+        String loopVarName = null;
+        for (EObject dc : obj.eContents()) {
+            if (dc.eClass().getName().contains("FeatureMembership")) {
+                for (EObject gc : dc.eContents()) {
+                    if (gc.eClass().getName().contains("ReferenceUsage")) {
+                        loopVarName = ((org.omg.sysml.lang.sysml.Element) gc).getDeclaredName();
+                        break;
+                    }
+                }
+                if (loopVarName != null) break;
+            }
+        }
+        String rangeText = null;
+        for (EObject dc : obj.eContents()) {
+            if (dc.eClass().getName().contains("ParameterMembership")) {
+                for (EObject gc : dc.eContents()) {
+                    if (gc.eClass().getName().contains("ReferenceUsage")) {
+                        for (EObject gg : gc.eContents()) {
+                            if (gg.eClass().getName().contains("FeatureValue")) {
+                                for (EObject expr : gg.eContents()) {
+                                    if (expr.eClass().getName().contains("OperatorExpression")) {
+                                        List<String> literals = new ArrayList<>();
+                                        for (java.util.Iterator<EObject> lit = expr.eAllContents(); lit.hasNext();) {
+                                            EObject litObj = lit.next();
+                                            if (litObj.eClass().getName().contains("LiteralInteger")) {
+                                                try {
+                                                    var valFeat = litObj.eClass().getEStructuralFeature("value");
+                                                    if (valFeat != null) {
+                                                        Object val = litObj.eGet(valFeat);
+                                                        if (val != null) literals.add(val.toString());
+                                                    }
+                                                } catch (Exception ignored) {}
+                                            }
+                                        }
+                                        if (!literals.isEmpty()) {
+                                            rangeText = String.join(", ", literals);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                break;
+            }
+        }
+        return new String[]{loopVarName, rangeText};
+    }
+
+    /** 创建 ForLoop 循环体节点 (含嵌套循环展开) */
+    private static String createForLoopBodyNode(EObject obj, String id, String mergeId, PipelineContext ctx) {
+        int pmCount = 0;
+        String bodyActionId = null;
+        for (EObject dc : obj.eContents()) {
+            if (dc.eClass().getName().contains("ParameterMembership")) {
+                pmCount++;
+                if (pmCount == 2) {
+                    for (EObject gc : dc.eContents()) {
+                        String gcClass = gc.eClass().getName();
+                        if (!(gc instanceof org.omg.sysml.lang.sysml.Element)) continue;
+                        String gcId = ((org.omg.sysml.lang.sysml.Element) gc).getElementId();
+                        if (gcClass.contains("ActionUsage") || gcClass.contains("AssignmentActionUsage")) {
+                            EObject nestedLoop = null;
+                            for (EObject inner : gc.eContents()) {
+                                String innerCn = inner.eClass().getName();
+                                if ("ForLoopActionUsage".equals(innerCn) || "WhileLoopActionUsage".equals(innerCn)
+                                        || "LoopActionUsage".equals(innerCn)) {
+                                    nestedLoop = inner; break;
+                                }
+                            }
+                            if (nestedLoop != null) {
+                                String nc = nestedLoop.eClass().getName();
+                                String[] res;
+                                if ("ForLoopActionUsage".equals(nc))
+                                    res = LoopExpander.expandNestedForLoop(ctx.activity, nestedLoop, ctx.sysmlBasePath);
+                                else if ("WhileLoopActionUsage".equals(nc))
+                                    res = LoopExpander.expandNestedWhileLoop(ctx.activity, nestedLoop, ctx.sysmlBasePath);
+                                else
+                                    res = LoopExpander.expandNestedLoopAction(ctx.activity, nestedLoop, ctx.sysmlBasePath);
+                                bodyActionId = res[0];
+                                MainRunner.logicalEdges.add(new MainRunner.EdgeData(mergeId, res[0]));
+                                MainRunner.logicalEdges.add(new MainRunner.EdgeData(res[1], mergeId));
+                                for (java.util.Iterator<EObject> it = nestedLoop.eAllContents(); it.hasNext();) {
+                                    EObject d = it.next();
+                                    if (d instanceof org.omg.sysml.lang.sysml.Element) {
+                                        String dId = ((org.omg.sysml.lang.sysml.Element) d).getElementId();
+                                        if (dId != null) MainRunner.loopBodyNodeIds.add(dId);
+                                    }
+                                }
+                                break;
+                            }
+                            EObject bodyObj = gc;
+                            for (EObject inner : gc.eContents()) {
+                                if (inner.eClass().getName().contains("AssignmentActionUsage")) {
+                                    bodyObj = inner; break;
+                                }
+                            }
+                            String expr = ExpressionUtils.extractAssignmentText(bodyObj);
+                            String nodeName, bodyText;
+                            if (!expr.isEmpty()) {
+                                nodeName = expr.replaceAll("[^a-zA-Z0-9_]", "_");
+                                bodyText = expr;
+                            } else {
+                                nodeName = "ForLoopBody_" + gcId.substring(0, Math.min(8, gcId.length()));
+                                bodyText = "forLoopBody";
+                            }
+                            ActivityNode bodyNode;
+                            if (!expr.isEmpty() && expr.contains("=")) {
+                                bodyNode = UmlHelper.createOpaqueActionForAssignment(ctx.activity, nodeName, expr);
+                            } else {
+                                bodyNode = UmlHelper.createCallBehaviorActionWithBody(ctx.activity, nodeName, bodyText, "SysMLv2");
+                            }
+                            MainRunner.umlNodes.put(gcId, bodyNode);
+                            MainRunner.uuidToNameMap.put(gcId, nodeName);
+                            bodyActionId = gcId;
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        return bodyActionId;
+    }
+
+    // ======== Task 5: handleIfActionUsage helper methods ========
+
+    /** 提取 IfActionUsage 的条件表达式 */
+    private static String[] extractIfCondition(EObject obj, PipelineContext ctx) {
+        String conditionText = null;
+        StringBuilder debugInfo = new StringBuilder();
+        // 方法0: 从直接子元素 ParameterMembership 提取 OperatorExpression
+        for (EObject dc : obj.eContents()) {
+            if (dc.eClass().getName().contains("ParameterMembership")) {
+                for (EObject gc : dc.eContents()) {
+                    if (gc.eClass().getName().contains("OperatorExpression")) {
+                        String exprText = ExpressionUtils.buildExpressionText(gc);
+                        if (exprText != null && !exprText.isEmpty() && !exprText.contains(" . ")
+                                && ExpressionUtils.isValidExpression(exprText)) {
+                            conditionText = exprText;
+                        }
+                        break;
+                    }
+                }
+                if (conditionText != null) break;
+            }
+        }
+        // 方法1: .sysml 正则提取
+        if (conditionText == null || conditionText.isEmpty()) {
+            try {
+                String text = Files.readString(Paths.get(ctx.sysmlBasePath.replace(".sysmlx", ".sysml")));
+                Matcher m = Pattern.compile("if\\s+([^\\{]+)\\s*\\{").matcher(text);
+                int matchIdx = 0;
+                while (m.find()) {
+                    if (matchIdx == ctx.consumedIfRegexCount) {
+                        conditionText = m.group(1).trim();
+                        debugInfo.append("Used .sysml regex (pos=").append(ctx.consumedIfRegexCount).append("): ")
+                                .append(conditionText).append("\n");
+                        break;
+                    }
+                    matchIdx++;
+                }
+                ctx.consumedIfRegexCount++;
+            } catch (Exception ignored) {}
+        }
+        if (conditionText == null || conditionText.isEmpty()) {
+            conditionText = "true";
+            debugInfo.append("WARNING: Could not extract guard condition, using default 'true'\n");
+        }
+        return new String[]{conditionText, debugInfo.length() > 0 ? debugInfo.toString() : null};
+    }
+
+    /** 创建 IfActionUsage 的分支节点 */
+    private static Object[] createIfBranchNodes(EObject obj, String id, String conditionText,
+            List<EObject> paramMemberships, PipelineContext ctx) {
+        List<String> branchBodies = new ArrayList<>();
+        int branchCount = 0;
+        boolean hasNestedIf = false;
+        for (int pmIdx = 1; pmIdx < paramMemberships.size(); pmIdx++) {
+            EObject pm = paramMemberships.get(pmIdx);
+            for (EObject gc : pm.eContents()) {
+                if (!(gc instanceof org.omg.sysml.lang.sysml.Element)) continue;
+                String gcClass = gc.eClass().getName();
+                String gcId = ((org.omg.sysml.lang.sysml.Element) gc).getElementId();
+                if (gcClass.contains("IfActionUsage")) {
+                    hasNestedIf = true;
+                    MainRunner.logicalEdges.add(new MainRunner.EdgeData(id, gcId, "else"));
+                    branchBodies.add(null);
+                    branchCount++;
+                } else if (gcClass.contains("ActionUsage") || gcClass.contains("AssignmentActionUsage")) {
+                    EObject nestedIfInBranch = null;
+                    for (EObject deepGc : gc.eContents()) {
+                        if (deepGc.eClass().getName().contains("IfActionUsage")
+                                && !deepGc.eClass().getName().contains("While")) {
+                            nestedIfInBranch = deepGc; break;
+                        }
+                    }
+                    if (nestedIfInBranch != null) {
+                        String nestedIfId = ((org.omg.sysml.lang.sysml.Element) nestedIfInBranch).getElementId();
+                        String nestedIfMergeId = nestedIfId + "_ifMerge";
+                        String guardStr = (branchCount == 0) ? conditionText : "else";
+                        MainRunner.logicalEdges.add(new MainRunner.EdgeData(id, nestedIfId, guardStr));
+                        branchBodies.add(nestedIfMergeId);
+                        hasNestedIf = true;
+                        branchCount++;
+                    } else {
+                        String gcName = ((org.omg.sysml.lang.sysml.Element) gc).getDeclaredName();
+                        String expr = ExpressionUtils.extractAssignmentText(gc);
+                        String nodeName, bodyText;
+                        if (gcName != null && !gcName.isEmpty()) {
+                            nodeName = gcName; bodyText = null;
+                        } else if (!expr.isEmpty()) {
+                            nodeName = expr.replaceAll("[^a-zA-Z0-9_]", "_");
+                            bodyText = expr;
+                        } else {
+                            nodeName = ExpressionUtils.sanitizeName(gcClass) + "_" + gcId.substring(0, 8);
+                            bodyText = null;
+                        }
+                        ActivityNode branchNode;
+                        if (bodyText != null && !bodyText.isEmpty() && bodyText.contains("=")) {
+                            branchNode = UmlHelper.createOpaqueActionForAssignment(ctx.activity, nodeName, bodyText);
+                        } else {
+                            branchNode = UmlHelper.createCallBehaviorActionWithBody(ctx.activity, nodeName, bodyText, "SysMLv2");
+                        }
+                        MainRunner.umlNodes.put(gcId, branchNode);
+                        MainRunner.uuidToNameMap.put(gcId, nodeName);
+                        MainRunner.nameToIdMap.put(nodeName, gcId);
+                        String guardStr = (branchCount == 0) ? conditionText : "else";
+                        MainRunner.logicalEdges.add(new MainRunner.EdgeData(id, gcId, guardStr));
+                        branchBodies.add(gcId);
+                        branchCount++;
+                    }
+                }
+            }
+        }
+        return new Object[]{branchBodies, hasNestedIf, branchCount};
+    }
+
+    // ======== Task 6: handleTransitionUsage helper methods ========
+
+    /** 提取 TransitionUsage 的 guard 条件 */
+    private static String extractTransitionGuard(EObject obj, PipelineContext ctx) {
+        String guardText = null;
+        for (EObject child : obj.eContents()) {
+            if (child.eClass().getName().equals("TransitionFeatureMembership")) {
+                String kind = ExpressionUtils.getFeatureString(child, "kind");
+                if ("guard".equals(kind)) {
+                    for (EObject expr : child.eContents()) {
+                        if (expr.eClass().getName().contains("OperatorExpression")) {
+                            guardText = ExpressionUtils.buildExpressionText(expr);
+                            if (guardText != null && !guardText.isEmpty()
+                                    && ExpressionUtils.isValidExpression(guardText)) {
+                                break;
+                            }
+                            guardText = null;
+                        }
+                    }
+                }
+            }
+            if (guardText != null) break;
+        }
+        // Fallback: .sysml regex
+        if (guardText == null || guardText.isEmpty()) {
+            try {
+                String text = Files.readString(Paths.get(ctx.sysmlBasePath.replace(".sysmlx", ".sysml")));
+                Matcher m = Pattern.compile("if\\s+(.+?)\\s+then\\b").matcher(text);
+                int count = 0;
+                while (m.find()) {
+                    if (count == ctx.decideDeferredEdges.size()) {
+                        guardText = m.group(1).trim(); break;
+                    }
+                    count++;
+                }
+            } catch (Exception ignored) {}
+        }
+        return guardText;
+    }
+
+    /** 解析 TransitionUsage 的目标动作名和 ID */
+    private static String[] resolveTransitionTarget(EObject obj, PipelineContext ctx) {
+        String targetName = null;
+        if (!ctx.sysmlIfTargets.isEmpty()) {
+            int currentIdx = ctx.decideDeferredEdges.size();
+            if (currentIdx < ctx.sysmlIfTargets.size()) {
+                targetName = ctx.sysmlIfTargets.get(currentIdx);
+            }
+        }
+        String condSuccTgtId = null;
+        if (targetName == null) {
+            for (EObject mChild : obj.eContents()) {
+                if (mChild.eClass().getName().equals("OwningMembership")) {
+                    for (EObject succ : mChild.eContents()) {
+                        if (succ.eClass().getName().equals("SuccessionAsUsage")) {
                             int endIdx = 0;
-                            for (EObject efm : inner.eContents()) {
+                            for (EObject efm : succ.eContents()) {
                                 if (efm.eClass().getName().equals("EndFeatureMembership")) {
-                                    if (endIdx == 1) { // second end = target
+                                    if (endIdx == 1) {
                                         for (EObject ref : efm.eContents()) {
                                             if (ref.eClass().getName().contains("ReferenceUsage")) {
                                                 for (EObject rs : ref.eContents()) {
@@ -2435,13 +2611,16 @@ class Pass2Nodes {
                                                             if (rfFeat != null) {
                                                                 Object rfVal = rs.eGet(rfFeat);
                                                                 if (rfVal instanceof EObject) {
-                                                                    initialStateId = ((org.omg.sysml.lang.sysml.Element) rfVal)
-                                                                            .getElementId();
+                                                                    rfVal = EcoreUtil.resolve((EObject) rfVal, ctx.resourceSet);
+                                                                    if (rfVal instanceof org.omg.sysml.lang.sysml.Element) {
+                                                                        condSuccTgtId = ((org.omg.sysml.lang.sysml.Element) rfVal).getElementId();
+                                                                        targetName = ((org.omg.sysml.lang.sysml.Element) rfVal).getDeclaredName();
+                                                                        System.out.println("[DEBUG] TransitionUsage: XMI target = "
+                                                                                + targetName + " (id=" + condSuccTgtId + ")");
+                                                                    }
                                                                 }
                                                             }
-                                                        } catch (Exception ignored) {
-                                                            // ignored
-                                                        }
+                                                        } catch (Exception ignored) {}
                                                     }
                                                 }
                                             }
@@ -2451,182 +2630,10 @@ class Pass2Nodes {
                                 }
                             }
                         }
-                        // TransitionUsage -> record transition data
-                        else if ("TransitionUsage".equals(innerCn)) {
-                            String srcStateId = null;
-                            String tgtStateId = null;
-                            String triggerTypeName = null;
-
-                            for (EObject tc : inner.eContents()) {
-                                String tcCn = tc.eClass().getName();
-                                // Source: Membership.memberElement -> StateUsage
-                                if ("Membership".equals(tcCn) && !tcCn.contains("End") && !tcCn.contains("Parameter")
-                                        && !tcCn.contains("Owning")) {
-                                    try {
-                                        var meFeat = tc.eClass().getEStructuralFeature("memberElement");
-                                        if (meFeat != null) {
-                                            Object meVal = tc.eGet(meFeat);
-                                            if (meVal instanceof EObject) {
-                                                srcStateId = ((org.omg.sysml.lang.sysml.Element) meVal).getElementId();
-                                            }
-                                        }
-                                    } catch (Exception ignored) {
-                                        // ignored
-                                    }
-                                }
-                                // Trigger: TransitionFeatureMembership(kind=trigger) ->
-                                // AcceptActionUsage -> ParameterMembership -> ReferenceUsage ->
-                                // FeatureTyping
-                                if ("TransitionFeatureMembership".equals(tcCn)) {
-                                    String kind = ExpressionUtils.getFeatureString(tc, "kind");
-                                    if ("trigger".equals(kind)) {
-                                        for (EObject acu : tc.eContents()) {
-                                            if (acu.eClass().getName().equals("AcceptActionUsage")) {
-                                                for (EObject pm : acu.eContents()) {
-                                                    if (pm.eClass().getName().equals("ParameterMembership")) {
-                                                        for (EObject ru : pm.eContents()) {
-                                                            if (ru.eClass().getName().contains("ReferenceUsage")) {
-                                                                for (EObject ft : ru.eContents()) {
-                                                                    if (ft.eClass().getName().equals("FeatureTyping")) {
-                                                                        try {
-                                                                            var typeFeat = ft.eClass()
-                                                                                    .getEStructuralFeature("type");
-                                                                            if (typeFeat != null) {
-                                                                                Object typeVal = ft.eGet(typeFeat);
-                                                                                if (typeVal instanceof EObject) {
-                                                                                    triggerTypeName = ((org.omg.sysml.lang.sysml.Element) typeVal)
-                                                                                            .getDeclaredName();
-                                                                                }
-                                                                            }
-                                                                        } catch (Exception ignored) {
-                                                                            // ignored
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                // Target: OwningMembership -> SuccessionAsUsage -> second
-                                // EndFeatureMembership -> ReferenceSubsetting
-                                if ("OwningMembership".equals(tcCn)) {
-                                    for (EObject succ : tc.eContents()) {
-                                        if (succ.eClass().getName().equals("SuccessionAsUsage")) {
-                                            int tEndIdx = 0;
-                                            for (EObject efm : succ.eContents()) {
-                                                if (efm.eClass().getName().equals("EndFeatureMembership")) {
-                                                    if (tEndIdx == 1) { // second end = target
-                                                        for (EObject ref : efm.eContents()) {
-                                                            if (ref.eClass().getName().contains("ReferenceUsage")) {
-                                                                for (EObject rs : ref.eContents()) {
-                                                                    if (rs.eClass().getName()
-                                                                            .equals("ReferenceSubsetting")) {
-                                                                        try {
-                                                                            var rfFeat = rs.eClass()
-                                                                                    .getEStructuralFeature(
-                                                                                            "referencedFeature");
-                                                                            if (rfFeat != null) {
-                                                                                Object rfVal = rs.eGet(rfFeat);
-                                                                                if (rfVal instanceof EObject) {
-                                                                                    tgtStateId = ((org.omg.sysml.lang.sysml.Element) rfVal)
-                                                                                            .getElementId();
-                                                                                }
-                                                                            }
-                                                                        } catch (Exception ignored) {
-                                                                            // ignored
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                    tEndIdx++;
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            if (srcStateId != null && tgtStateId != null) {
-                                stateTransitions.add(new String[]{srcStateId, tgtStateId, triggerTypeName});
-                            }
-                        }
                     }
                 }
             }
-
-            // Create UML States
-            for (Map.Entry<String, String> entry : stateIdToName.entrySet()) {
-                org.eclipse.uml2.uml.State state = ctx.factory.createState();
-                state.setName(entry.getValue());
-                region.getSubvertices().add(state);
-                stateNameToUml.put(entry.getValue(), state);
-            }
-
-            // Create Initial Pseudostate and transition to initial state
-            if (initialStateId != null && stateIdToName.containsKey(initialStateId)) {
-                org.eclipse.uml2.uml.Pseudostate ps = ctx.factory.createPseudostate();
-                ps.setName("Initial");
-                ps.setKind(org.eclipse.uml2.uml.PseudostateKind.INITIAL_LITERAL);
-                region.getSubvertices().add(ps);
-                String initName = stateIdToName.get(initialStateId);
-                org.eclipse.uml2.uml.State initState = stateNameToUml.get(initName);
-                if (initState != null) {
-                    org.eclipse.uml2.uml.Transition initTrans = ctx.factory.createTransition();
-                    initTrans.setSource(ps);
-                    initTrans.setTarget(initState);
-                    region.getTransitions().add(initTrans);
-                }
-            }
-
-            // Create Transitions with Triggers
-            Map<String, org.eclipse.uml2.uml.Signal> signalMap = new HashMap<>();
-            for (String[] trans : stateTransitions) {
-                String srcName = stateIdToName.get(trans[0]);
-                String tgtName = stateIdToName.get(trans[1]);
-                String triggerName = trans[2];
-                org.eclipse.uml2.uml.State srcState = srcName != null ? stateNameToUml.get(srcName) : null;
-                org.eclipse.uml2.uml.State tgtState = tgtName != null ? stateNameToUml.get(tgtName) : null;
-                if (srcState != null && tgtState != null) {
-                    org.eclipse.uml2.uml.Transition umlTrans = ctx.factory.createTransition();
-                    umlTrans.setSource(srcState);
-                    umlTrans.setTarget(tgtState);
-                    // Create trigger with SignalEvent
-                    if (triggerName != null && !triggerName.isEmpty()) {
-                        org.eclipse.uml2.uml.Signal sig = signalMap.get(triggerName);
-                        if (sig == null) {
-                            sig = (org.eclipse.uml2.uml.Signal) ctx.umlModel.createPackagedElement(triggerName,
-                                    UMLPackage.Literals.SIGNAL);
-                            signalMap.put(triggerName, sig);
-                        }
-                        org.eclipse.uml2.uml.SignalEvent sigEvent = ctx.factory.createSignalEvent();
-                        sigEvent.setName(triggerName + "_Event");
-                        sigEvent.setSignal(sig);
-                        ctx.umlModel.getPackagedElements().add(sigEvent);
-                        org.eclipse.uml2.uml.Trigger trigger = ctx.factory.createTrigger();
-                        trigger.setName(triggerName + "_Trigger");
-                        trigger.setEvent(sigEvent);
-                        umlTrans.getTriggers().add(trigger);
-                    }
-                    region.getTransitions().add(umlTrans);
-                }
-            }
-
         }
-        // CalculationDefinition (non-action calc) -> UML Class
-        else if ("CalculationDefinition".equals(className)) {
-            org.eclipse.uml2.uml.Class umlClass = (org.eclipse.uml2.uml.Class) ctx.umlModel
-                    .createPackagedElement(structName, UMLPackage.Literals.CLASS);
-            org.eclipse.uml2.uml.Comment comment = ctx.factory.createComment();
-            comment.setBody("SysML: CalculationDefinition");
-            umlClass.getOwnedComments().add(comment);
-            ctx.structuralElements.add(umlClass);
-            ctx.processedStructuralIds.add(id);
-            MainRunner.nameToIdMap.put(structName, id);
-        }
+        return new String[]{targetName, condSuccTgtId};
     }
 }

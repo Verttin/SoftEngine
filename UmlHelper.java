@@ -7,10 +7,14 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.eclipse.uml2.uml.*;
 
-class UmlHelper {
+/**
+ * UmlHelper
+ *
+ * @since 2026-06-22
+ */
 
-    static CallBehaviorAction createCallBehaviorAction(Activity parentActivity, String nodeName) {
-        return createCallBehaviorActionWithBody(parentActivity, nodeName, null, null);
+class UmlHelper {
+        return createCallBehaviorActionWithBody( parentActivity, nodeName, null, null);
     }
 
     /**

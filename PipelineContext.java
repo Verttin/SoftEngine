@@ -17,8 +17,6 @@ import org.eclipse.uml2.uml.*;
  * 持有原本在 executePureXMLPipeline() 方法内声明、但被多个 PASS 共用的局部变量。
  */
 class PipelineContext {
-
-    // --- 基础路径 ---
     String sysmlBasePath;
 
     // --- EMF 资源 ---
