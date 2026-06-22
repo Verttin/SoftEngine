@@ -47,45 +47,81 @@ class ExpressionUtils {
             }
         } catch (Exception ignored) {
         }
-        try {
-            var litFeat = obj.eClass().getEStructuralFeature("literalExpression");
-            if (litFeat != null) {
-                Object val = obj.eGet(litFeat);
-                if (val instanceof String) {
-                    return (String) val;
-                }
-                if (val != null) {
-                    return val.toString();
-                }
+        String val = tryGetFeatureValue(obj, "literalExpression");
+        if (!val.isEmpty())
+            return val;
+        val = tryGetFeatureValue(obj, "literal");
+        if (!val.isEmpty())
+            return val;
+        val = tryGetFeatureValue(obj, "integerValue");
+        if (!val.isEmpty())
+            return val;
+        val = tryGetFeatureValue(obj, "value");
+        if (!val.isEmpty())
+            return val;
+        return "";
+    }
+
+    static String buildExpressionText(EObject opExpr) {
+        if (opExpr == null)
+            return "";
+
+        String op = mapOperator(getFeatureString(opExpr, "operator"));
+        String className = opExpr.eClass().getName();
+
+        // FeatureReferenceExpression: try direct referent
+        if (op.isEmpty()) {
+            Object ref = safeEGet(opExpr, "referent");
+            if (ref instanceof EObject) {
+                String n = extractName((EObject) ref);
+                if (!n.isEmpty())
+                    return n;
             }
-        } catch (Exception ignored) {
         }
-        try {
-            var litFeat2 = obj.eClass().getEStructuralFeature("literal");
-            if (litFeat2 != null) {
-                Object val = obj.eGet(litFeat2);
-                if (val != null) {
-                    return val.toString();
-                }
+
+        // FeatureChainExpression
+        if (className.contains("FeatureChain")) {
+            return extractFeatureChain(opExpr);
+        }
+
+        // FeatureReferenceExpression Membership fallback
+        String refResult = buildFeatureReferenceExpression(opExpr, className);
+        if (!refResult.isEmpty())
+            return refResult;
+
+        // OperatorExpression: collect operands
+        return buildOperatorExpression(opExpr, op);
+    }
+
+    /**
+     * 从 FeatureReferenceExpression 的 Membership.memberElement 解析引用名称
+     * 当 EMF referent 无法解析时使用
+     */
+    private static String buildFeatureReferenceExpression(EObject opExpr, String className) {
+        if (!className.contains("FeatureReference"))
+            return "";
+
+        for (EObject child : opExpr.eContents()) {
+            if ("Membership".equals(child.eClass().getName())) {
+                String name = resolveMemberElementName(child);
+                if (!name.isEmpty())
+                    return name;
             }
-        } catch (Exception ignored) {
         }
+        // Fallback: resolve memberElement proxy
         try {
-            var ivFeat = obj.eClass().getEStructuralFeature("integerValue");
-            if (ivFeat != null) {
-                Object val = obj.eGet(ivFeat);
-                if (val != null) {
-                    return val.toString();
-                }
-            }
-        } catch (Exception ignored) {
-        }
-        try {
-            var valFeat = obj.eClass().getEStructuralFeature("value");
-            if (valFeat != null) {
-                Object val = obj.eGet(valFeat);
-                if (val != null) {
-                    return val.toString();
+            for (EObject child : opExpr.eContents()) {
+                if (child.eClass().getName().equals("Membership")) {
+                    Object meVal = safeEGet(child, "memberElement");
+                    if (meVal instanceof EObject) {
+                        EObject resolved = (EObject) meVal;
+                        if (resolved.eIsProxy()) {
+                            resolved = EcoreUtil.resolve(resolved, child.eResource());
+                        }
+                        String n = extractName(resolved);
+                        if (!n.isEmpty())
+                            return n;
+                    }
                 }
             }
         } catch (Exception ignored) {
@@ -93,102 +129,29 @@ class ExpressionUtils {
         return "";
     }
 
-    static String buildExpressionText(EObject opExpr) {
-        // 处理 null 情况
-        if (opExpr == null)
-            return "";
-
-        String op = mapOperator(getFeatureString(opExpr, "operator"));
-
-        // FeatureReferenceExpression: 直接返回 referent 名称
-        if (op.isEmpty()) {
-            try {
-                var refFeat = opExpr.eClass().getEStructuralFeature("referent");
-                if (refFeat != null) {
-                    Object ref = opExpr.eGet(refFeat);
-                    if (ref instanceof EObject) {
-                        String n = extractName((EObject) ref);
-                        if (!n.isEmpty()) {
-                            return n;
-                        }
-                    }
-                }
-            } catch (Exception ignored) {
-            }
-        }
-
-        // FeatureChainExpression: 构建特征链 (如 battery.charge)
-        String className = opExpr.eClass().getName();
-        if (className.contains("FeatureChain")) {
-            return extractFeatureChain(opExpr);
-        }
-
-        // Membership fallback for FeatureReferenceExpression: 从子 Membership 的
-        // memberElement 解析引用名称
-        // 当 EMF referent 无法解析时使用 (XMI 中 FeatureReferenceExpression 使用
-        // Membership(memberElement=...) 而非直接 referent)
-        if (className.contains("FeatureReference")) {
-            for (EObject child : opExpr.eContents()) {
-                String childCn = child.eClass().getName();
-                if ("Membership".equals(childCn)) {
-                    String name = resolveMemberElementName(child);
-                    if (!name.isEmpty()) {
-                        return name;
-                    }
-                }
-            }
-            // Fallback: 在 resource 中按 ID 查找 memberElement 引用的元素
-            try {
-                for (EObject child : opExpr.eContents()) {
-                    if (child.eClass().getName().equals("Membership")) {
-                        var meFeat = child.eClass().getEStructuralFeature("memberElement");
-                        if (meFeat != null) {
-                            Object meVal = child.eGet(meFeat);
-                            if (meVal instanceof EObject) {
-                                EObject resolved = (EObject) meVal;
-                                if (resolved.eIsProxy()) {
-                                    resolved = EcoreUtil.resolve(resolved, child.eResource());
-                                }
-                                String n = extractName(resolved);
-                                if (!n.isEmpty()) {
-                                    return n;
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (Exception ignored) {
-            }
-        }
-
-        // ===== 关键修复: 按 ParameterMembership 的文档顺序收集操作数 =====
-        // SysML XMI 中, OperatorExpression 的 ownedRelationship 列表中的
-        // ParameterMembership 子元素按文档顺序排列: 第1个是左操作数, 第2个是右操作数
+    /**
+     * 从 OperatorExpression 按 ParameterMembership 文档顺序收集操作数
+     */
+    private static String buildOperatorExpression(EObject opExpr, String op) {
         List<String> parts = new ArrayList<>();
 
-        // 方法1 (优先): 通过 ownedRelationship → ParameterMembership 按顺序提取
-        // 必须保持 ParameterMembership 在 ownedRelationship 列表中的原始顺序
+        // 方法1 (优先): ownedRelationship → ParameterMembership 按顺序提取
         java.util.List<EObject> orderedParamMemberships = new java.util.ArrayList<>();
         try {
-            var orFeat = opExpr.eClass().getEStructuralFeature("ownedRelationship");
-            if (orFeat != null) {
-                Object orVal = opExpr.eGet(orFeat);
-                if (orVal instanceof List) {
-                    for (Object item : (List<?>) orVal) {
-                        if (!(item instanceof EObject)) {
-                            continue;
-                        }
-                        String cn = ((EObject) item).eClass().getName();
-                        if (cn.contains("ParameterMembership") && !cn.contains("Return")) {
-                            orderedParamMemberships.add((EObject) item);
-                        }
+            Object orVal = safeEGet(opExpr, "ownedRelationship");
+            if (orVal instanceof List) {
+                for (Object item : (List<?>) orVal) {
+                    if (!(item instanceof EObject))
+                        continue;
+                    String cn = ((EObject) item).eClass().getName();
+                    if (cn.contains("ParameterMembership") && !cn.contains("Return")) {
+                        orderedParamMemberships.add((EObject) item);
                     }
                 }
             }
         } catch (Exception ignored) {
         }
 
-        // 按文档顺序从 ParameterMembership 中提取操作数
         for (EObject pm : orderedParamMemberships) {
             String operandText = extractOperandFromParameterMembership(pm);
             if (operandText != null && !operandText.isEmpty()) {
@@ -196,100 +159,91 @@ class ExpressionUtils {
             }
         }
 
-        // 方法2 (fallback): 通过 eContents 直接查找 operand 子节点
+        // 方法2 (fallback): eContents 直接查找
         if (parts.isEmpty()) {
-            for (EObject child : opExpr.eContents()) {
-                String cn = child.eClass().getName();
-                if (cn.contains("ParameterMembership") && !cn.contains("Return")) {
-                    // 递归处理 ParameterMembership
-                    for (EObject gc : child.eContents()) {
-                        String cn2 = gc.eClass().getName();
-                        if (cn2.contains("FeatureReference")) {
-                            try {
-                                var refFeat = gc.eClass().getEStructuralFeature("referent");
-                                if (refFeat != null) {
-                                    Object ref = gc.eGet(refFeat);
-                                    if (ref instanceof EObject) {
-                                        String n = extractName((EObject) ref);
-                                        if (!n.isEmpty()) {
-                                            parts.add(n);
-                                            break;
-                                        }
-                                    }
-                                }
-                            } catch (Exception ignored) {
-                            }
-                        } else if (cn2.contains("FeatureChain")) {
-                            String chain = extractFeatureChain(gc);
-                            if (!chain.isEmpty()) {
-                                parts.add(chain);
-                                break;
-                            }
-                        } else if (cn2.contains("OperatorExpression")) {
-                            String inner = buildExpressionText(gc);
-                            if (!inner.isEmpty()) {
-                                parts.add(inner);
-                                break;
-                            }
-                        } else {
-                            String n = extractName(gc);
-                            if (!n.isEmpty()) {
-                                parts.add(n);
-                                break;
-                            }
-                        }
-                    }
-                } else if (cn.contains("FeatureReference")) {
-                    try {
-                        var refFeat = child.eClass().getEStructuralFeature("referent");
-                        if (refFeat != null) {
-                            Object ref = child.eGet(refFeat);
-                            if (ref instanceof EObject) {
-                                String n = extractName((EObject) ref);
-                                if (!n.isEmpty()) {
-                                    parts.add(n);
-                                    continue;
-                                }
-                            }
-                        }
-                    } catch (Exception ignored) {
-                    }
-                    for (EObject gc : child.eContents()) {
-                        String n = extractName(gc);
-                        if (!n.isEmpty()) {
-                            parts.add(n);
-                            break;
-                        }
-                    }
-                } else if (cn.contains("FeatureChain")) {
-                    String chain = extractFeatureChain(child);
-                    if (!chain.isEmpty()) {
-                        parts.add(chain);
-                    }
-                } else if (cn.contains("Literal")) {
-                    String lit = extractName(child);
-                    if (!lit.isEmpty()) {
-                        parts.add(lit);
-                    }
-                } else if (cn.contains("OperatorExpression")) {
-                    String innerText = buildExpressionText(child);
-                    if (!innerText.isEmpty()) {
-                        parts.add(innerText);
-                    }
-                }
-            }
+            collectOperandsFromContents(opExpr, parts);
         }
 
         if (parts.isEmpty())
             return "";
         if (op.isEmpty())
             return String.join(" ", parts);
-
-        // 中缀操作符: parts[0] op parts[1]
-        if (parts.size() >= 2) {
+        if (parts.size() >= 2)
             return parts.get(0) + " " + op + " " + parts.get(1);
-        }
         return parts.get(0) + " " + op;
+    }
+
+    /**
+     * 从 opExpr 的 eContents 中递归收集操作数
+     */
+    private static void collectOperandsFromContents(EObject opExpr, List<String> parts) {
+        for (EObject child : opExpr.eContents()) {
+            String cn = child.eClass().getName();
+            if (cn.contains("ParameterMembership") && !cn.contains("Return")) {
+                for (EObject gc : child.eContents()) {
+                    String cn2 = gc.eClass().getName();
+                    if (cn2.contains("FeatureReference")) {
+                        Object ref = safeEGet(gc, "referent");
+                        if (ref instanceof EObject) {
+                            String n = extractName((EObject) ref);
+                            if (!n.isEmpty()) {
+                                parts.add(n);
+                                break;
+                            }
+                        }
+                    } else if (cn2.contains("FeatureChain")) {
+                        String chain = extractFeatureChain(gc);
+                        if (!chain.isEmpty()) {
+                            parts.add(chain);
+                            break;
+                        }
+                    } else if (cn2.contains("OperatorExpression")) {
+                        String inner = buildExpressionText(gc);
+                        if (!inner.isEmpty()) {
+                            parts.add(inner);
+                            break;
+                        }
+                    } else {
+                        String n = extractName(gc);
+                        if (!n.isEmpty()) {
+                            parts.add(n);
+                            break;
+                        }
+                    }
+                }
+            } else if (cn.contains("FeatureReference")) {
+                Object ref = safeEGet(child, "referent");
+                if (ref instanceof EObject) {
+                    String n = extractName((EObject) ref);
+                    if (!n.isEmpty()) {
+                        parts.add(n);
+                        continue;
+                    }
+                }
+                for (EObject gc : child.eContents()) {
+                    String n = extractName(gc);
+                    if (!n.isEmpty()) {
+                        parts.add(n);
+                        break;
+                    }
+                }
+            } else if (cn.contains("FeatureChain")) {
+                String chain = extractFeatureChain(child);
+                if (!chain.isEmpty()) {
+                    parts.add(chain);
+                }
+            } else if (cn.contains("Literal")) {
+                String lit = extractName(child);
+                if (!lit.isEmpty()) {
+                    parts.add(lit);
+                }
+            } else if (cn.contains("OperatorExpression")) {
+                String innerText = buildExpressionText(child);
+                if (!innerText.isEmpty()) {
+                    parts.add(innerText);
+                }
+            }
+        }
     }
 
     /**
@@ -435,35 +389,20 @@ class ExpressionUtils {
         if (cn.contains("FeatureChain")) {
             return extractFeatureChain(obj);
         } else if (cn.contains("FeatureReference")) {
-            try {
-                var refFeat = obj.eClass().getEStructuralFeature("referent");
-                if (refFeat != null) {
-                    Object ref = obj.eGet(refFeat);
-                    if (ref instanceof EObject) {
-                        return extractName((EObject) ref);
-                    }
-                }
-            } catch (Exception ignored) {
+            Object ref = safeEGet(obj, "referent");
+            if (ref instanceof EObject) {
+                return extractName((EObject) ref);
             }
         } else if (cn.contains("Literal")) {
             String lit = extractName(obj);
-            if (!lit.isEmpty()) {
+            if (!lit.isEmpty())
                 return lit;
-            }
-            try {
-                var valFeat = obj.eClass().getEStructuralFeature("value");
-                if (valFeat != null) {
-                    Object val = obj.eGet(valFeat);
-                    if (val != null && !val.toString().isEmpty()) {
-                        return val.toString();
-                    }
-                }
-            } catch (Exception ignored) {
-            }
+            String val = tryGetFeatureValue(obj, "value");
+            if (!val.isEmpty())
+                return val;
         } else if (cn.contains("OperatorExpression")) {
             return buildExpressionText(obj);
         } else if (cn.contains("Feature") && !cn.contains("Membership") && !cn.contains("Value")) {
-            // 可能是 Feature 容器，递归找表达式
             for (EObject child : obj.eContents()) {
                 String result = tryExtractExpressionText(child);
                 if (result != null && !result.isEmpty())
@@ -515,58 +454,45 @@ class ExpressionUtils {
         } catch (Exception ignored) {
         }
 
-        // 方法1: 通过 "feature" 属性提取 (EMF 解析后可能是 FeatureChaining 列表)
-        try {
-            var featFeat = chainExpr.eClass().getEStructuralFeature("feature");
-            if (featFeat != null) {
-                Object featVal = chainExpr.eGet(featFeat);
-                if (featVal instanceof List) {
-                    for (Object f : (List<?>) featVal) {
-                        if (f instanceof EObject) {
-                            String n = extractName((EObject) f);
-                            if (!n.isEmpty()) {
-                                if (sb.length() > 0)
-                                    sb.append(".");
-                                sb.append(n);
-                            }
-                        }
-                    }
-                } else if (featVal instanceof EObject) {
-                    String n = extractName((EObject) featVal);
-                    if (!n.isEmpty())
+        // 方法1: 通过 "feature" 属性提取
+        Object featVal = safeEGet(chainExpr, "feature");
+        if (featVal instanceof List) {
+            for (Object f : (List<?>) featVal) {
+                if (f instanceof EObject) {
+                    String n = extractName((EObject) f);
+                    if (!n.isEmpty()) {
+                        if (sb.length() > 0)
+                            sb.append(".");
                         sb.append(n);
+                    }
                 }
             }
-        } catch (Exception ignored) {
+        } else if (featVal instanceof EObject) {
+            String n = extractName((EObject) featVal);
+            if (!n.isEmpty())
+                sb.append(n);
         }
         if (sb.length() > 0)
             return sb.toString();
 
-        // 方法2: 通过 "chainingFeature" 属性提取 (FeatureChainExpression 的 XMI 特有属性)
-        // XMI 中 chainingFeature 元素引用了链中每个 feature
-        try {
-            var chainFeat = chainExpr.eClass().getEStructuralFeature("chainingFeature");
-            if (chainFeat != null) {
-                Object chainVal = chainExpr.eGet(chainFeat);
-                List<String> chainNames = new ArrayList<>();
-                if (chainVal instanceof List) {
-                    for (Object cf : (List<?>) chainVal) {
-                        if (cf instanceof EObject) {
-                            String n = extractName((EObject) cf);
-                            if (!n.isEmpty())
-                                chainNames.add(n);
-                        }
-                    }
-                } else if (chainVal instanceof EObject) {
-                    String n = extractName((EObject) chainVal);
+        // 方法2: 通过 "chainingFeature" 属性提取
+        Object chainVal = safeEGet(chainExpr, "chainingFeature");
+        List<String> chainNames2 = new ArrayList<>();
+        if (chainVal instanceof List) {
+            for (Object cf : (List<?>) chainVal) {
+                if (cf instanceof EObject) {
+                    String n = extractName((EObject) cf);
                     if (!n.isEmpty())
-                        chainNames.add(n);
-                }
-                if (!chainNames.isEmpty()) {
-                    return String.join(".", chainNames);
+                        chainNames2.add(n);
                 }
             }
-        } catch (Exception ignored) {
+        } else if (chainVal instanceof EObject) {
+            String n = extractName((EObject) chainVal);
+            if (!n.isEmpty())
+                chainNames2.add(n);
+        }
+        if (!chainNames2.isEmpty()) {
+            return String.join(".", chainNames2);
         }
 
         // 方法3: 通过 ownedRelationship → chainingFeature 递归提取
@@ -674,24 +600,20 @@ class ExpressionUtils {
      */
     static String resolveMemberElementName(EObject membershipObj) {
         try {
-            var meFeat = membershipObj.eClass().getEStructuralFeature("memberElement");
-            if (meFeat != null) {
-                Object meVal = membershipObj.eGet(meFeat);
-                if (meVal instanceof EObject) {
-                    EObject resolved = (EObject) meVal;
-                    if (resolved.eIsProxy()) {
-                        resolved = EcoreUtil.resolve(resolved, membershipObj.eResource());
-                    }
-                    if (resolved instanceof org.omg.sysml.lang.sysml.Element) {
-                        String n = ((org.omg.sysml.lang.sysml.Element) resolved).getDeclaredName();
-                        if (n != null && !n.isEmpty())
-                            return n;
-                    }
-                    // Fallback: 尝试 extractName
-                    String n = extractName(resolved);
-                    if (!n.isEmpty())
+            Object meVal = safeEGet(membershipObj, "memberElement");
+            if (meVal instanceof EObject) {
+                EObject resolved = (EObject) meVal;
+                if (resolved.eIsProxy()) {
+                    resolved = EcoreUtil.resolve(resolved, membershipObj.eResource());
+                }
+                if (resolved instanceof org.omg.sysml.lang.sysml.Element) {
+                    String n = ((org.omg.sysml.lang.sysml.Element) resolved).getDeclaredName();
+                    if (n != null && !n.isEmpty())
                         return n;
                 }
+                String n = extractName(resolved);
+                if (!n.isEmpty())
+                    return n;
             }
         } catch (Exception ignored) {
         }
@@ -720,81 +642,55 @@ class ExpressionUtils {
         StringBuilder debugInfo = new StringBuilder();
         debugInfo.append("extractAssignmentText() for ").append(assignAction.eClass().getName()).append("\n");
 
-        try {
-            var feat = assignAction.eClass().getEStructuralFeature("endFeature");
-            if (feat != null) {
-                Object val = assignAction.eGet(feat);
-                if (val instanceof EObject) {
-                    lhs = extractName((EObject) val);
-                    debugInfo.append("  LHS from endFeature: ").append(lhs).append("\n");
-                } else if (val instanceof List) {
-                    for (Object e : (List<?>) val) {
-                        if (e instanceof EObject) {
-                            String n = extractName((EObject) e);
-                            if (!n.isEmpty()) {
-                                lhs = n;
-                                break;
-                            }
-                        }
+        Object endFeatureVal = safeEGet(assignAction, "endFeature");
+        if (endFeatureVal instanceof EObject) {
+            lhs = extractName((EObject) endFeatureVal);
+            debugInfo.append("  LHS from endFeature: ").append(lhs).append("\n");
+        } else if (endFeatureVal instanceof List) {
+            for (Object e : (List<?>) endFeatureVal) {
+                if (e instanceof EObject) {
+                    String n = extractName((EObject) e);
+                    if (!n.isEmpty()) {
+                        lhs = n;
+                        break;
                     }
-                    debugInfo.append("  LHS from endFeature (List): ").append(lhs).append("\n");
                 }
             }
-        } catch (Exception ignored) {
+            debugInfo.append("  LHS from endFeature (List): ").append(lhs).append("\n");
         }
 
         if (lhs.isEmpty()) {
-            // fallback: 直接使用 referent (AssignmentActionUsage)
-            try {
-                var refFeat = assignAction.eClass().getEStructuralFeature("referent");
-                if (refFeat != null) {
-                    Object ref = assignAction.eGet(refFeat);
-                    if (ref instanceof EObject) {
-                        lhs = extractName((EObject) ref);
-                        debugInfo.append("  LHS from referent: ").append(lhs).append("\n");
-                    }
-                }
-            } catch (Exception ignored) {
+            Object ref = safeEGet(assignAction, "referent");
+            if (ref instanceof EObject) {
+                lhs = extractName((EObject) ref);
+                debugInfo.append("  LHS from referent: ").append(lhs).append("\n");
             }
         }
 
         if (lhs.isEmpty()) {
-            // fallback: 从 ReferenceSubsetting 获取
-            try {
-                for (EObject child : assignAction.eContents()) {
-                    if (child.eClass().getName().contains("ReferenceSubsetting")) {
-                        var refFeat = child.eClass().getEStructuralFeature("referencedFeature");
-                        if (refFeat != null) {
-                            Object ref = child.eGet(refFeat);
-                            if (ref instanceof EObject) {
-                                lhs = extractName((EObject) ref);
-                                if (!lhs.isEmpty()) {
-                                    debugInfo.append("  LHS from ReferenceSubsetting: ").append(lhs).append("\n");
-                                    break;
-                                }
-                            }
+            for (EObject child : assignAction.eContents()) {
+                if (child.eClass().getName().contains("ReferenceSubsetting")) {
+                    Object refFeature = safeEGet(child, "referencedFeature");
+                    if (refFeature instanceof EObject) {
+                        lhs = extractName((EObject) refFeature);
+                        if (!lhs.isEmpty()) {
+                            debugInfo.append("  LHS from ReferenceSubsetting: ").append(lhs).append("\n");
+                            break;
                         }
                     }
                 }
-            } catch (Exception ignored) {
             }
         }
 
-        // RHS: 优先使用 valueExpression (直接指向 OperatorExpression)
+        // RHS: 优先使用 valueExpression
         String rhs = "";
-        try {
-            var veFeat = assignAction.eClass().getEStructuralFeature("valueExpression");
-            if (veFeat != null) {
-                Object ve = assignAction.eGet(veFeat);
-                if (ve instanceof EObject) {
-                    String veText = buildExpressionText((EObject) ve);
-                    if (!veText.isEmpty()) {
-                        rhs = veText;
-                        debugInfo.append("  RHS from valueExpression: ").append(rhs).append("\n");
-                    }
-                }
+        Object ve = safeEGet(assignAction, "valueExpression");
+        if (ve instanceof EObject) {
+            String veText = buildExpressionText((EObject) ve);
+            if (!veText.isEmpty()) {
+                rhs = veText;
+                debugInfo.append("  RHS from valueExpression: ").append(rhs).append("\n");
             }
-        } catch (Exception ignored) {
         }
 
         if (rhs.isEmpty()) {
@@ -815,16 +711,9 @@ class ExpressionUtils {
                     } else if (cn.contains("Literal")) {
                         rhs = extractName(val);
                     } else if (cn.contains("FeatureReference")) {
-                        // 获取 referent 的名称
-                        try {
-                            var refFeat = val.eClass().getEStructuralFeature("referent");
-                            if (refFeat != null) {
-                                Object ref = val.eGet(refFeat);
-                                if (ref instanceof EObject) {
-                                    rhs = extractName((EObject) ref);
-                                }
-                            }
-                        } catch (Exception ignored) {
+                        Object ref = safeEGet(val, "referent");
+                        if (ref instanceof EObject) {
+                            rhs = extractName((EObject) ref);
                         }
                     }
 
@@ -841,16 +730,11 @@ class ExpressionUtils {
         }
 
         if (rhs.isEmpty()) {
-            // fallback: ParameterMembership → ownedMemberFeature → FeatureValue → Literal
             for (EObject pm : assignAction.eContents()) {
                 if (!pm.eClass().getName().contains("ParameterMembership"))
                     continue;
 
-                var omfFeat = pm.eClass().getEStructuralFeature("ownedMemberFeature");
-                if (omfFeat == null)
-                    continue;
-
-                Object omf = pm.eGet(omfFeat);
+                Object omf = safeEGet(pm, "ownedMemberFeature");
                 if (!(omf instanceof EObject))
                     continue;
 
@@ -858,11 +742,7 @@ class ExpressionUtils {
                     if (!fv.eClass().getName().contains("FeatureValue"))
                         continue;
 
-                    var valFeat = fv.eClass().getEStructuralFeature("value");
-                    if (valFeat == null)
-                        continue;
-
-                    Object val = fv.eGet(valFeat);
+                    Object val = safeEGet(fv, "value");
                     if (val instanceof EObject) {
                         String t = buildExpressionText((EObject) val);
                         if (t.isEmpty())
@@ -896,17 +776,28 @@ class ExpressionUtils {
     }
 
     static String getFeatureString(EObject obj, String featureName) {
+        return tryGetFeatureValue(obj, featureName);
+    }
+
+    /** 安全获取 EObject 特性值, 返回 Object */
+    static Object safeEGet(EObject obj, String featureName) {
         try {
-            var feat = obj.eClass().getEStructuralFeature(featureName);
+            EStructuralFeature feat = obj.eClass().getEStructuralFeature(featureName);
             if (feat != null) {
-                Object val = obj.eGet(feat);
-                if (val instanceof String)
-                    return (String) val;
-                if (val != null)
-                    return val.toString();
+                return obj.eGet(feat);
             }
         } catch (Exception ignored) {
         }
+        return null;
+    }
+
+    /** 安全获取 EObject 特性值, 返回 String */
+    static String tryGetFeatureValue(EObject obj, String featureName) {
+        Object val = safeEGet(obj, featureName);
+        if (val instanceof String)
+            return (String) val;
+        if (val != null)
+            return val.toString();
         return "";
     }
 

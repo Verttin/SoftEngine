@@ -13,131 +13,16 @@ public class LoopExpander {
             Map<String, List<String>> ifThenBranchIds, Map<String, ActivityNode> umlNodes, ActivityNode loopMergeNode,
             ActivityNode untilDecisionNode) {
 
-        // 遍历 bodyNodeIds, 构建顺序流
         int i = 0;
         while (i < bodyNodeIds.size()) {
             String currentId = bodyNodeIds.get(i);
             ActivityNode currentNode = umlNodes.get(currentId);
 
-            // 检查当前是否是 if DecisionNode
-            String ifBaId = null;
-            for (String key : ifDecisionIds.keySet()) {
-                if (ifDecisionIds.get(key).equals(currentId)) {
-                    ifBaId = key;
-                    break;
-                }
-            }
+            String ifBaId = findIfDecisionForNode(currentId, ifDecisionIds);
 
             if (ifBaId != null) {
-                // 这是 if DecisionNode, 需要处理 if 分支
-                String ifCondText = ifConditionTexts.get(ifBaId);
-                List<String> thenBranchIds = ifThenBranchIds.get(ifBaId);
-                ActivityNode ifDecisionNode = currentNode;
-
-                // ifDecision → thenBranch 动作 (guard = condition)
-                if (thenBranchIds != null && !thenBranchIds.isEmpty()) {
-                    for (String thenId : thenBranchIds) {
-                        ActivityNode thenNode = umlNodes.get(thenId);
-                        if (thenNode != null) {
-                            ControlFlow thenFlow = UMLFactory.eINSTANCE.createControlFlow();
-                            thenFlow.setSource(ifDecisionNode);
-                            thenFlow.setTarget(thenNode);
-                            OpaqueExpression thenGuard = UMLFactory.eINSTANCE.createOpaqueExpression();
-                            thenGuard.getBodies().add(ifCondText);
-                            thenFlow.setGuard(thenGuard);
-                            activity.getEdges().add(thenFlow);
-
-                            // thenBranch 动作 → 后续节点 (下一个 bodyNode 或直到末尾)
-                            // then 分支执行完后应该连到后续的节点
-                            // 这里先不创建边, 由后续顺序流逻辑处理
-                        }
-                    }
-                }
-
-                // ifDecision[else] → 下一个节点 (跳过 if then 分支)
-                // else 分支直接连到 bodyNodeIds 中 thenBranchIds 之后的节点
-                // 找到 thenBranchIds 之后的位置
-                int nextIdx = i + 1;
-                // thenBranchIds 中的节点在 bodyNodeIds 中排在 ifDecision 之后
-                // 需要找到 thenBranchIds 之后的第一个非 thenBranch 节点
-                while (nextIdx < bodyNodeIds.size()) {
-                    String nextId = bodyNodeIds.get(nextIdx);
-                    boolean isThenBranch = false;
-                    if (thenBranchIds != null) {
-                        for (String tid : thenBranchIds) {
-                            if (nextId.equals(tid)) {
-                                isThenBranch = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (!isThenBranch)
-                        break;
-                    nextIdx++;
-                }
-
-                if (nextIdx < bodyNodeIds.size()) {
-                    // else 分支连到后续节点
-                    String elseTargetId = bodyNodeIds.get(nextIdx);
-                    ActivityNode elseTargetNode = umlNodes.get(elseTargetId);
-                    if (elseTargetNode != null) {
-                        ControlFlow elseFlow = UMLFactory.eINSTANCE.createControlFlow();
-                        elseFlow.setSource(ifDecisionNode);
-                        elseFlow.setTarget(elseTargetNode);
-                        OpaqueExpression elseGuard = UMLFactory.eINSTANCE.createOpaqueExpression();
-                        elseGuard.getBodies().add("else");
-                        elseFlow.setGuard(elseGuard);
-                        activity.getEdges().add(elseFlow);
-                    }
-                } else if (untilDecisionNode != null) {
-                    // until 循环中, if 是 body 的最后一个节点, else 分支连到 untilDecision
-                    ControlFlow elseFlow = UMLFactory.eINSTANCE.createControlFlow();
-                    elseFlow.setSource(ifDecisionNode);
-                    elseFlow.setTarget(untilDecisionNode);
-                    OpaqueExpression elseGuard = UMLFactory.eINSTANCE.createOpaqueExpression();
-                    elseGuard.getBodies().add("else");
-                    elseFlow.setGuard(elseGuard);
-                    activity.getEdges().add(elseFlow);
-                }
-
-                // 处理 thenBranch 之间的顺序流，以及 thenBranch 到后续节点的连接
-                if (thenBranchIds != null && !thenBranchIds.isEmpty()) {
-                    for (int t = 0; t < thenBranchIds.size(); t++) {
-                        ActivityNode thenNode = umlNodes.get(thenBranchIds.get(t));
-                        if (thenNode != null) {
-                            if (t + 1 < thenBranchIds.size()) {
-                                // thenBranch[t] → thenBranch[t+1]
-                                ActivityNode nextThenNode = umlNodes.get(thenBranchIds.get(t + 1));
-                                if (nextThenNode != null) {
-                                    ControlFlow seqFlow = UMLFactory.eINSTANCE.createControlFlow();
-                                    seqFlow.setSource(thenNode);
-                                    seqFlow.setTarget(nextThenNode);
-                                    activity.getEdges().add(seqFlow);
-                                }
-                            } else {
-                                // 最后一个 thenBranch → 后续节点
-                                if (nextIdx < bodyNodeIds.size()) {
-                                    ActivityNode nextNode = umlNodes.get(bodyNodeIds.get(nextIdx));
-                                    if (nextNode != null) {
-                                        ControlFlow thenToNext = UMLFactory.eINSTANCE.createControlFlow();
-                                        thenToNext.setSource(thenNode);
-                                        thenToNext.setTarget(nextNode);
-                                        activity.getEdges().add(thenToNext);
-                                    }
-                                } else if (loopMergeNode != null) {
-                                    // until 循环中, thenBranch 是 body 最后节点, 连回 Merge (循环回路)
-                                    ControlFlow thenToMerge = UMLFactory.eINSTANCE.createControlFlow();
-                                    thenToMerge.setSource(thenNode);
-                                    thenToMerge.setTarget(loopMergeNode);
-                                    activity.getEdges().add(thenToMerge);
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // 跳过 ifDecision 和 thenBranchIds，继续处理后续节点
-                i = nextIdx;
+                i = handleIfBranch(activity, ifBaId, ifConditionTexts, ifThenBranchIds, ifDecisionIds, currentNode,
+                        bodyNodeIds, i, umlNodes, loopMergeNode, untilDecisionNode);
                 continue;
             }
 
@@ -153,6 +38,124 @@ public class LoopExpander {
                 }
             }
             i++;
+        }
+    }
+
+    /** 查找当前节点是否为 if DecisionNode */
+    private static String findIfDecisionForNode(String currentId, Map<String, String> ifDecisionIds) {
+        for (String key : ifDecisionIds.keySet()) {
+            if (ifDecisionIds.get(key).equals(currentId)) {
+                return key;
+            }
+        }
+        return null;
+    }
+
+    /** 处理 if 分支: DecisionNode → then/else 分支 → 后续节点 */
+    private static int handleIfBranch(Activity activity, String ifBaId, Map<String, String> ifConditionTexts,
+            Map<String, List<String>> ifThenBranchIds, Map<String, String> ifDecisionIds, ActivityNode ifDecisionNode,
+            List<String> bodyNodeIds, int currentIdx, Map<String, ActivityNode> umlNodes, ActivityNode loopMergeNode,
+            ActivityNode untilDecisionNode) {
+
+        String ifCondText = ifConditionTexts.get(ifBaId);
+        List<String> thenBranchIds = ifThenBranchIds.get(ifBaId);
+
+        // ifDecision → thenBranch 动作 (guard = condition)
+        if (thenBranchIds != null && !thenBranchIds.isEmpty()) {
+            for (String thenId : thenBranchIds) {
+                ActivityNode thenNode = umlNodes.get(thenId);
+                if (thenNode != null) {
+                    ControlFlow thenFlow = UMLFactory.eINSTANCE.createControlFlow();
+                    thenFlow.setSource(ifDecisionNode);
+                    thenFlow.setTarget(thenNode);
+                    OpaqueExpression thenGuard = UMLFactory.eINSTANCE.createOpaqueExpression();
+                    thenGuard.getBodies().add(ifCondText);
+                    thenFlow.setGuard(thenGuard);
+                    activity.getEdges().add(thenFlow);
+                }
+            }
+        }
+
+        // 找到 thenBranchIds 之后的第一个非 thenBranch 节点
+        int nextIdx = currentIdx + 1;
+        while (nextIdx < bodyNodeIds.size()) {
+            String nextId = bodyNodeIds.get(nextIdx);
+            boolean isThenBranch = false;
+            if (thenBranchIds != null) {
+                for (String tid : thenBranchIds) {
+                    if (nextId.equals(tid)) {
+                        isThenBranch = true;
+                        break;
+                    }
+                }
+            }
+            if (!isThenBranch)
+                break;
+            nextIdx++;
+        }
+
+        // else 分支连到后续节点
+        if (nextIdx < bodyNodeIds.size()) {
+            ActivityNode elseTargetNode = umlNodes.get(bodyNodeIds.get(nextIdx));
+            if (elseTargetNode != null) {
+                ControlFlow elseFlow = UMLFactory.eINSTANCE.createControlFlow();
+                elseFlow.setSource(ifDecisionNode);
+                elseFlow.setTarget(elseTargetNode);
+                OpaqueExpression elseGuard = UMLFactory.eINSTANCE.createOpaqueExpression();
+                elseGuard.getBodies().add("else");
+                elseFlow.setGuard(elseGuard);
+                activity.getEdges().add(elseFlow);
+            }
+        } else if (untilDecisionNode != null) {
+            ControlFlow elseFlow = UMLFactory.eINSTANCE.createControlFlow();
+            elseFlow.setSource(ifDecisionNode);
+            elseFlow.setTarget(untilDecisionNode);
+            OpaqueExpression elseGuard = UMLFactory.eINSTANCE.createOpaqueExpression();
+            elseGuard.getBodies().add("else");
+            elseFlow.setGuard(elseGuard);
+            activity.getEdges().add(elseFlow);
+        }
+
+        // 处理 thenBranch 之间的顺序流
+        if (thenBranchIds != null && !thenBranchIds.isEmpty()) {
+            connectThenBranchFlows(activity, thenBranchIds, nextIdx, bodyNodeIds, umlNodes, loopMergeNode);
+        }
+
+        return nextIdx;
+    }
+
+    /** 连接 thenBranch 内部顺序流及到后续节点的连接 */
+    private static void connectThenBranchFlows(Activity activity, List<String> thenBranchIds, int nextIdx,
+            List<String> bodyNodeIds, Map<String, ActivityNode> umlNodes, ActivityNode loopMergeNode) {
+        for (int t = 0; t < thenBranchIds.size(); t++) {
+            ActivityNode thenNode = umlNodes.get(thenBranchIds.get(t));
+            if (thenNode == null)
+                continue;
+            if (t + 1 < thenBranchIds.size()) {
+                ActivityNode nextThenNode = umlNodes.get(thenBranchIds.get(t + 1));
+                if (nextThenNode != null) {
+                    ControlFlow seqFlow = UMLFactory.eINSTANCE.createControlFlow();
+                    seqFlow.setSource(thenNode);
+                    seqFlow.setTarget(nextThenNode);
+                    activity.getEdges().add(seqFlow);
+                }
+            } else {
+                // 最后一个 thenBranch → 后续节点
+                if (nextIdx < bodyNodeIds.size()) {
+                    ActivityNode nextNode = umlNodes.get(bodyNodeIds.get(nextIdx));
+                    if (nextNode != null) {
+                        ControlFlow thenToNext = UMLFactory.eINSTANCE.createControlFlow();
+                        thenToNext.setSource(thenNode);
+                        thenToNext.setTarget(nextNode);
+                        activity.getEdges().add(thenToNext);
+                    }
+                } else if (loopMergeNode != null) {
+                    ControlFlow thenToMerge = UMLFactory.eINSTANCE.createControlFlow();
+                    thenToMerge.setSource(thenNode);
+                    thenToMerge.setTarget(loopMergeNode);
+                    activity.getEdges().add(thenToMerge);
+                }
+            }
         }
     }
 

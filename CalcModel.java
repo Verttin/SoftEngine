@@ -21,6 +21,12 @@ import org.eclipse.uml2.uml.OpaqueBehavior;
 import org.eclipse.uml2.uml.OpaqueExpression;
 import org.eclipse.uml2.uml.UMLPackage;
 
+/**
+ * CalcModel
+ *
+ * @since 2026-06-22
+ */
+
 class CalcModel {
 
     /**
@@ -40,286 +46,314 @@ class CalcModel {
                                 Map<String, String> calcIdToType,
                                 Map<String, String> globalIdToName) {
         try {
-
-            // --- PASS C1: CalculationUsage 结构提取 ---
-            System.out.println("[DEBUG] === PASS C1: CalculationUsage 结构提取 ===");
-
-            // 收集上下文 features (AttributeUsage + ReferenceUsage)
-            Map<String, String[]> contextFeatures = new HashMap<>(); // id → [name, typeName, direction, isAttr]
-            Iterator<EObject> iterator = ctx.resource.getAllContents();
-            while (iterator.hasNext()) {
-                EObject obj = iterator.next();
-                if (!(obj instanceof org.omg.sysml.lang.sysml.Element)) {
-                    continue;
-                }
-                String eid = ((org.omg.sysml.lang.sysml.Element) obj).getElementId();
-                String dn = ((org.omg.sysml.lang.sysml.Element) obj).getDeclaredName();
-                String cn = obj.eClass().getName();
-                if (eid == null || dn == null) {
-                    continue;
-                }
-
-                if ("AttributeUsage".equals(cn)) {
-                    String typeName = getFeatureTypeName(obj);
-                    contextFeatures.put(eid, new String[]{dn, typeName, "", "true"});
-                } else if ("ReferenceUsage".equals(cn)) {
-                    String dir = getFeatureValue(obj, "direction");
-                    // 只收集 ActionUsage 的直接子参数 (排除 calc 内部的参数)
-                    EObject container = obj.eContainer();
-                    boolean isCalcParam = false;
-                    while (container != null) {
-                        if ("CalculationUsage".equals(container.eClass().getName())) {
-                            isCalcParam = true;
-                            break;
-                        }
-                        if ("ActionUsage".equals(container.eClass().getName())) {
-                            break;
-                        }
-                        container = container.eContainer();
-                    }
-                    if (!isCalcParam && !dir.isEmpty()) {
-                        String typeName = getFeatureTypeName(obj);
-                        contextFeatures.put(eid, new String[]{dn, typeName, dir, "false"});
-                    }
-                }
-            }
-            System.out.println("[DEBUG] Context features: " + contextFeatures.size());
-
-            // Phase 1: 注册 calc output reference IDs (递归搜索 ReturnParameterMembership)
-            Map<String, String> calcOutputToCalcId = new HashMap<>();
-            Map<String, String> calcOutputName = new HashMap<>();
             List<String> calcIds = new ArrayList<>(calcIdToName.keySet());
 
-            for (String calcId : calcIds) {
-                iterator = ctx.resource.getAllContents();
-                while (iterator.hasNext()) {
-                    EObject obj = iterator.next();
-                    if (!(obj instanceof org.omg.sysml.lang.sysml.Element)) {
-                        continue;
-                    }
-                    String eid = ((org.omg.sysml.lang.sysml.Element) obj).getElementId();
-                    if (!calcId.equals(eid)) {
-                        continue;
-                    }
-                    // 找到 calc, 递归搜索 ReturnParameterMembership
-                    findAndRegisterOutputs(obj, calcId, calcOutputToCalcId, calcOutputName);
-                    break;
-                }
-            }
-            System.out.println("[DEBUG] Calc outputs registered: " + calcOutputToCalcId.size());
-            for (Map.Entry<String, String> e : calcOutputToCalcId.entrySet()) {
-                System.out.println("[DEBUG]   output " + calcOutputName.get(e.getKey()) + " (id:" + e.getKey().substring(0,8) + "...) → calc " + calcIdToName.get(e.getValue()));
-            }
-
-            // Phase 2: 解析每个 calc 的 input 表达式
-            // 结果: calcDeps[calcId] = [依赖的 calcId 列表]
-            //       calcInputDetails[calcId] = [{paramName, kind, detail}]
+            // PASS C1: CalculationUsage 结构提取
+            Map<String, String> calcOutputToCalcId = new HashMap<>();
+            Map<String, String> calcOutputName = new HashMap<>();
             Map<String, List<String>> calcDeps = new HashMap<>();
             Map<String, List<String[]>> calcInputDetails = new HashMap<>();
-            for (String cid : calcIds) {
-                calcDeps.put(cid, new ArrayList<>());
-                calcInputDetails.put(cid, new ArrayList<>());
-            }
+            passC1_ExtractCalcUsage(ctx.resource, calcIds, calcIdToName, globalIdToName,
+                    calcOutputToCalcId, calcOutputName, calcDeps, calcInputDetails);
 
-            for (String calcId : calcIds) {
-                iterator = ctx.resource.getAllContents();
-                while (iterator.hasNext()) {
-                    EObject obj = iterator.next();
-                    if (!(obj instanceof org.omg.sysml.lang.sysml.Element)) {
-                        continue;
-                    }
-                    if (!calcId.equals(((org.omg.sysml.lang.sysml.Element) obj).getElementId())) {
-                        continue;
-                    }
-                    // 遍历 FeatureMembership 子元素找 input ReferenceUsage
-                    for (EObject fm : obj.eContents()) {
-                        if (!"FeatureMembership".equals(fm.eClass().getName())) {
-                            continue;
-                        }
-                        for (EObject ru : fm.eContents()) {
-                            if (!"ReferenceUsage".equals(ru.eClass().getName())) {
-                                continue;
-                            }
-                            String paramName = ((org.omg.sysml.lang.sysml.Element) ru).getDeclaredName();
-                            String dir = getFeatureValue(ru, "direction");
-                            if (!"in".equals(dir)) {
-                                continue;
-                            }
-                            // 找到 FeatureValue → 表达式
-                            for (EObject fv : ru.eContents()) {
-                                if (!"FeatureValue".equals(fv.eClass().getName())) {
-                                    continue;
-                                }
-                                for (EObject expr : fv.eContents()) {
-                                    String exprType = expr.eClass().getName();
-                                    if ("FeatureReferenceExpression".equals(exprType)) {
-                                        String memberId = getMemberElementId(expr);
-                                        String memberName = memberId != null ? globalIdToName.get(memberId) : null;
-                                        calcInputDetails.get(calcId).add(
-                                            new String[]{paramName, "DIRECT_REF", memberId, memberName});
-                                        // 检查是否是另一个 calc 的 output
-                                        if (memberId != null && calcOutputToCalcId.containsKey(memberId)) {
-                                            String srcCalc = calcOutputToCalcId.get(memberId);
-                                            if (!calcDeps.get(calcId).contains(srcCalc)) {
-                                                calcDeps.get(calcId).add(srcCalc);
-                                            }
-                                        }
-                                    } else if ("FeatureChainExpression".equals(exprType)) {
-                                        String baseCalcId = findChainBaseRef(expr);
-                                        String chainMemberId = findChainMember(expr);
-                                        String baseCalcName = baseCalcId != null ? calcIdToName.get(baseCalcId) : null;
-                                        String chainName = chainMemberId != null ? calcOutputName.getOrDefault(chainMemberId, globalIdToName.get(chainMemberId)) : null;
-                                        calcInputDetails.get(calcId).add(new String[]{paramName, "CHAIN_REF",
-                                            baseCalcId, baseCalcName, chainMemberId, chainName});
-                                        if (baseCalcId != null && calcIdToName.containsKey(baseCalcId)) {
-                                            if (!calcDeps.get(calcId).contains(baseCalcId)) {
-                                                calcDeps.get(calcId).add(baseCalcId);
-                                            }
-                                        }
-                                    } else if ("InvocationExpression".equals(exprType)) {
-                                        String funcName = findInvocationFunction(expr);
-                                        List<String> argNames = findInvocationArgs(expr, globalIdToName);
-                                        calcInputDetails.get(calcId).add(new String[]{paramName, "INVOCATION",
-                                            funcName, String.join(",", argNames)});
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    break;
-                }
-            }
+            // PASS C2: 拓扑排序
+            List<String> topoOrder = passC2_TopoSort(calcIds, calcDeps, calcIdToName);
 
-            // 打印 C1 结果
-            for (String calcId : calcIds) {
-                System.out.println("[DEBUG] Calc '" + calcIdToName.get(calcId)
-                    + "' (" + calcIdToType.getOrDefault(calcId, "?") + "):");
-                System.out.println("  inputs: " + calcInputDetails.get(calcId).size()
-                    + ", deps: " + calcDeps.get(calcId).stream()
-                        .map(d -> calcIdToName.get(d)).toList());
-                    for (String[] detail : calcInputDetails.get(calcId)) {
-                        System.out.println("    " + detail[0] + " = " + detail[1]
-                            + "(" + (detail.length > 2 ? detail[2] : "") + ")");
-                    }
-            }
-
-            // --- PASS C2: 依赖图构建 + 拓扑排序 ---
-            System.out.println("\n[DEBUG] === PASS C2: 拓扑排序 ===");
-            List<String> sorted = new ArrayList<>();
-            Set<String> remaining = new HashSet<>(calcIds);
-            Set<String> resolved = new HashSet<>();
-            int maxIter = calcIds.size() + 1;
-            while (!remaining.isEmpty() && maxIter-- > 0) {
-                boolean progress = false;
-                for (String cid : new ArrayList<>(remaining)) {
-                    boolean allDepsResolved = true;
-                    for (String dep : calcDeps.get(cid)) {
-                        if (!resolved.contains(dep)) {
-                            allDepsResolved = false;
-                            break;
-                        }
-                    }
-                    if (allDepsResolved) {
-                        sorted.add(cid);
-                        resolved.add(cid);
-                        remaining.remove(cid);
-                        progress = true;
-                    }
-                }
-                    if (!progress) {
-                        // 环检测: 把剩余的按原顺序加入
-                        for (String cid : calcIds) {
-                            if (remaining.contains(cid)) {
-                                sorted.add(cid);
-                                remaining.remove(cid);
-                            }
-                        }
-                        System.out.println("[WARN] 依赖环检测, 按原序追加剩余 calc");
-                    }
-            }
-            List<String> topoOrder = sorted;
-            System.out.println("[DEBUG] 拓扑序: " + topoOrder.stream()
-                .map(id -> calcIdToName.get(id)).toList());
-
-            // --- PASS C3: UML 节点和边创建 ---
-            System.out.println("\n[DEBUG] === PASS C3: UML 节点/边创建 ===");
-            Map<String, CallBehaviorAction> calcActions = new HashMap<>();
-
-            for (String calcId : topoOrder) {
-                String name = calcIdToName.get(calcId);
-                String typeName = calcIdToType.getOrDefault(calcId, "");
-                String bodyText = typeName + "(" + calcId + ")";
-                CallBehaviorAction action = UmlHelper.createCallBehaviorActionWithBody(
-                    activity, name, bodyText, "SysML");
-                MainRunner.umlNodes.put(calcId, action);
-                calcActions.put(calcId, action);
-                MainRunner.nameToIdMap.put(name, calcId);
-                System.out.println("[DEBUG] Created CallBehaviorAction: " + name
-                    + " [" + typeName + "]");
-            }
-
-            // 创建依赖边 (ObjectFlow)
-            int edgeCount = 0;
-            for (String calcId : topoOrder) {
-                CallBehaviorAction target = calcActions.get(calcId);
-                for (String depId : calcDeps.get(calcId)) {
-                    CallBehaviorAction source = calcActions.get(depId);
-                    if (source != null) {
-                        ObjectFlow flow = ctx.factory.createObjectFlow();
-                        activity.getEdges().add(flow);
-                        flow.setSource(source);
-                        flow.setTarget(target);
-                        // 添加 guard 标注数据依赖信息
-                        String depOutputName = "";
-                        for (Map.Entry<String, String> e : calcOutputToCalcId.entrySet()) {
-                            if (depId.equals(e.getValue())) {
-                                depOutputName = calcOutputName.getOrDefault(e.getKey(), "");
-                                break;
-                            }
-                        }
-                        OpaqueExpression guardExpr = ctx.factory.createOpaqueExpression();
-                        guardExpr.getBodies().add(depOutputName);
-                        flow.setGuard(guardExpr);
-                        edgeCount++;
-                        System.out.println("[DEBUG] ObjectFlow: " + calcIdToName.get(depId)
-                            + "." + depOutputName + " → " + calcIdToName.get(calcId));
-                    }
-                }
-            }
-
-            // 添加 Start/End 节点
-            InitialNode startNode = (InitialNode) activity.createOwnedNode(
-                "Start", UMLPackage.Literals.INITIAL_NODE);
-            ActivityFinalNode endNode = (ActivityFinalNode) activity.createOwnedNode(
-                "End", UMLPackage.Literals.ACTIVITY_FINAL_NODE);
-            MainRunner.umlNodes.put("START_NODE", startNode);
-            MainRunner.umlNodes.put("END_NODE", endNode);
-
-            // Start → 第一个 calc (ControlFlow)
-            if (!topoOrder.isEmpty()) {
-                ControlFlow startFlow = ctx.factory.createControlFlow();
-                activity.getEdges().add(startFlow);
-                startFlow.setSource(startNode);
-                startFlow.setTarget(calcActions.get(topoOrder.get(0)));
-                edgeCount++;
-            }
-            // 最后一个 calc → End (ControlFlow)
-            if (!topoOrder.isEmpty()) {
-                ControlFlow endFlow = ctx.factory.createControlFlow();
-                activity.getEdges().add(endFlow);
-                endFlow.setSource(calcActions.get(topoOrder.get(topoOrder.size() - 1)));
-                endFlow.setTarget(endNode);
-                edgeCount++;
-            }
-
-            System.out.println("[DEBUG] PASS C3 完成: " + calcActions.size()
-                + " 个节点, " + edgeCount + " 条边");
+            // PASS C3: UML 节点和边创建
+            passC3_CreateNodesAndEdges(activity, ctx, topoOrder, calcIdToName, calcIdToType,
+                    calcDeps, calcOutputToCalcId, calcOutputName);
 
         } catch (Exception e) {
             System.out.println("[ERROR] Calc branch failed: "
                 + e.getClass().getName() + ": " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    /** PASS C1: 提取 CalculationUsage 结构 */
+    private static void passC1_ExtractCalcUsage(
+            org.eclipse.emf.ecore.resource.Resource resource, List<String> calcIds,
+            Map<String, String> calcIdToName, Map<String, String> globalIdToName,
+            Map<String, String> calcOutputToCalcId, Map<String, String> calcOutputName,
+            Map<String, List<String>> calcDeps, Map<String, List<String[]>> calcInputDetails) {
+
+        System.out.println("[DEBUG] === PASS C1: CalculationUsage 结构提取 ===");
+
+        // 收集上下文 features
+        Map<String, String[]> contextFeatures = new HashMap<>();
+        Iterator<EObject> iterator = resource.getAllContents();
+        while (iterator.hasNext()) {
+            EObject obj = iterator.next();
+            if (!(obj instanceof org.omg.sysml.lang.sysml.Element))
+                continue;
+            String eid = ((org.omg.sysml.lang.sysml.Element) obj).getElementId();
+            String dn = ((org.omg.sysml.lang.sysml.Element) obj).getDeclaredName();
+            String cn = obj.eClass().getName();
+            if (eid == null || dn == null)
+                continue;
+
+            if ("AttributeUsage".equals(cn)) {
+                contextFeatures.put(eid, new String[]{dn, getFeatureTypeName(obj), "", "true"});
+            } else if ("ReferenceUsage".equals(cn)) {
+                String dir = getFeatureValue(obj, "direction");
+                if (!isCalculationParameter(obj) && !dir.isEmpty()) {
+                    contextFeatures.put(eid, new String[]{dn, getFeatureTypeName(obj), dir, "false"});
+                }
+            }
+        }
+        System.out.println("[DEBUG] Context features: " + contextFeatures.size());
+
+        // Phase 1: 注册 calc output reference IDs
+        for (String calcId : calcIds) {
+            initCalcDeps(calcId, calcDeps, calcInputDetails);
+            iterator = resource.getAllContents();
+            while (iterator.hasNext()) {
+                EObject obj = iterator.next();
+                if (!(obj instanceof org.omg.sysml.lang.sysml.Element))
+                    continue;
+                if (!calcId.equals(((org.omg.sysml.lang.sysml.Element) obj).getElementId()))
+                    continue;
+                findAndRegisterOutputs(obj, calcId, calcOutputToCalcId, calcOutputName);
+                break;
+            }
+        }
+        System.out.println("[DEBUG] Calc outputs registered: " + calcOutputToCalcId.size());
+        for (Map.Entry<String, String> e : calcOutputToCalcId.entrySet()) {
+            System.out.println("[DEBUG]   output " + calcOutputName.get(e.getKey())
+                + " (id:" + e.getKey().substring(0, 8) + "...) → calc " + calcIdToName.get(e.getValue()));
+        }
+
+        // Phase 2: 解析每个 calc 的 input 表达式
+        for (String calcId : calcIds) {
+            parseCalcInputs(resource, calcId, calcIdToName, globalIdToName,
+                    calcOutputToCalcId, calcOutputName, calcDeps, calcInputDetails);
+        }
+
+        // 打印 C1 结果
+        for (String calcId : calcIds) {
+            System.out.println("[DEBUG] Calc '" + calcIdToName.get(calcId)
+                + "' (" + calcIdToType.getOrDefault(calcId, "?") + "):");
+            System.out.println("  inputs: " + calcInputDetails.get(calcId).size()
+                + ", deps: " + calcDeps.get(calcId).stream()
+                    .map(d -> calcIdToName.get(d)).toList());
+            for (String[] detail : calcInputDetails.get(calcId)) {
+                System.out.println("    " + detail[0] + " = " + detail[1]
+                    + "(" + (detail.length > 2 ? detail[2] : "") + ")");
+            }
+        }
+    }
+
+    /** 检查 EObject 是否是 CalculationUsage 的直接子参数 (非 calc 内部参数) */
+    private static boolean isCalculationParameter(EObject obj) {
+        EObject container = obj.eContainer();
+        while (container != null) {
+            if ("CalculationUsage".equals(container.eClass().getName()))
+                return true;
+            if ("ActionUsage".equals(container.eClass().getName()))
+                return false;
+            container = container.eContainer();
+        }
+        return false;
+    }
+
+    private static void initCalcDeps(String calcId, Map<String, List<String>> calcDeps,
+            Map<String, List<String[]>> calcInputDetails) {
+        calcDeps.put(calcId, new ArrayList<>());
+        calcInputDetails.put(calcId, new ArrayList<>());
+    }
+
+    /** 解析单个 calc 的 input 表达式 */
+    private static void parseCalcInputs(
+            org.eclipse.emf.ecore.resource.Resource resource, String calcId,
+            Map<String, String> calcIdToName, Map<String, String> globalIdToName,
+            Map<String, String> calcOutputToCalcId, Map<String, String> calcOutputName,
+            Map<String, List<String>> calcDeps, Map<String, List<String[]>> calcInputDetails) {
+        Iterator<EObject> iterator = resource.getAllContents();
+        while (iterator.hasNext()) {
+            EObject obj = iterator.next();
+            if (!(obj instanceof org.omg.sysml.lang.sysml.Element))
+                continue;
+            if (!calcId.equals(((org.omg.sysml.lang.sysml.Element) obj).getElementId()))
+                continue;
+
+            for (EObject fm : obj.eContents()) {
+                if (!"FeatureMembership".equals(fm.eClass().getName()))
+                    continue;
+                for (EObject ru : fm.eContents()) {
+                    if (!"ReferenceUsage".equals(ru.eClass().getName()))
+                        continue;
+                    String paramName = ((org.omg.sysml.lang.sysml.Element) ru).getDeclaredName();
+                    if (!"in".equals(getFeatureValue(ru, "direction")))
+                        continue;
+                    extractCalcInputExpr(ru, calcId, paramName, calcIdToName, globalIdToName,
+                            calcOutputToCalcId, calcOutputName, calcDeps, calcInputDetails);
+                }
+            }
+            break;
+        }
+    }
+
+    /** 从 FeatureValue 中提取 calc input 表达式详情 */
+    private static void extractCalcInputExpr(EObject ru, String calcId, String paramName,
+            Map<String, String> calcIdToName, Map<String, String> globalIdToName,
+            Map<String, String> calcOutputToCalcId, Map<String, String> calcOutputName,
+            Map<String, List<String>> calcDeps, Map<String, List<String[]>> calcInputDetails) {
+        for (EObject fv : ru.eContents()) {
+            if (!"FeatureValue".equals(fv.eClass().getName()))
+                continue;
+            for (EObject expr : fv.eContents()) {
+                String exprType = expr.eClass().getName();
+                if ("FeatureReferenceExpression".equals(exprType)) {
+                    String memberId = getMemberElementId(expr);
+                    String memberName = memberId != null ? globalIdToName.get(memberId) : null;
+                    calcInputDetails.get(calcId).add(
+                            new String[]{paramName, "DIRECT_REF", memberId, memberName});
+                    if (memberId != null && calcOutputToCalcId.containsKey(memberId)) {
+                        String srcCalc = calcOutputToCalcId.get(memberId);
+                        if (!calcDeps.get(calcId).contains(srcCalc))
+                            calcDeps.get(calcId).add(srcCalc);
+                    }
+                } else if ("FeatureChainExpression".equals(exprType)) {
+                    String baseCalcId = findChainBaseRef(expr);
+                    String chainMemberId = findChainMember(expr);
+                    String baseCalcName = baseCalcId != null ? calcIdToName.get(baseCalcId) : null;
+                    String chainName = chainMemberId != null
+                            ? calcOutputName.getOrDefault(chainMemberId, globalIdToName.get(chainMemberId))
+                            : null;
+                    calcInputDetails.get(calcId).add(new String[]{paramName, "CHAIN_REF",
+                            baseCalcId, baseCalcName, chainMemberId, chainName});
+                    if (baseCalcId != null && calcIdToName.containsKey(baseCalcId)) {
+                        if (!calcDeps.get(calcId).contains(baseCalcId))
+                            calcDeps.get(calcId).add(baseCalcId);
+                    }
+                } else if ("InvocationExpression".equals(exprType)) {
+                    String funcName = findInvocationFunction(expr);
+                    List<String> argNames = findInvocationArgs(expr, globalIdToName);
+                    calcInputDetails.get(calcId).add(new String[]{paramName, "INVOCATION",
+                            funcName, String.join(",", argNames)});
+                }
+            }
+        }
+    }
+
+    /** PASS C2: 拓扑排序 */
+    private static List<String> passC2_TopoSort(List<String> calcIds,
+            Map<String, List<String>> calcDeps, Map<String, String> calcIdToName) {
+        System.out.println("\n[DEBUG] === PASS C2: 拓扑排序 ===");
+        List<String> sorted = new ArrayList<>();
+        Set<String> remaining = new HashSet<>(calcIds);
+        Set<String> resolved = new HashSet<>();
+        int maxIter = calcIds.size() + 1;
+        while (!remaining.isEmpty() && maxIter-- > 0) {
+            boolean progress = false;
+            for (String cid : new ArrayList<>(remaining)) {
+                boolean allDepsResolved = true;
+                for (String dep : calcDeps.get(cid)) {
+                    if (!resolved.contains(dep)) {
+                        allDepsResolved = false;
+                        break;
+                    }
+                }
+                if (allDepsResolved) {
+                    sorted.add(cid);
+                    resolved.add(cid);
+                    remaining.remove(cid);
+                    progress = true;
+                }
+            }
+            if (!progress) {
+                for (String cid : calcIds) {
+                    if (remaining.contains(cid)) {
+                        sorted.add(cid);
+                        remaining.remove(cid);
+                    }
+                }
+                System.out.println("[WARN] 依赖环检测, 按原序追加剩余 calc");
+            }
+        }
+        System.out.println("[DEBUG] 拓扑序: " + sorted.stream()
+                .map(id -> calcIdToName.get(id)).toList());
+        return sorted;
+    }
+
+    /** PASS C3: UML 节点和边创建 */
+    private static void passC3_CreateNodesAndEdges(Activity activity, PipelineContext ctx,
+            List<String> topoOrder, Map<String, String> calcIdToName,
+            Map<String, String> calcIdToType, Map<String, List<String>> calcDeps,
+            Map<String, String> calcOutputToCalcId, Map<String, String> calcOutputName) {
+        System.out.println("\n[DEBUG] === PASS C3: UML 节点/边创建 ===");
+        Map<String, CallBehaviorAction> calcActions = new HashMap<>();
+
+        for (String calcId : topoOrder) {
+            String name = calcIdToName.get(calcId);
+            String typeName = calcIdToType.getOrDefault(calcId, "");
+            String bodyText = typeName + "(" + calcId + ")";
+            CallBehaviorAction action = UmlHelper.createCallBehaviorActionWithBody(
+                    activity, name, bodyText, "SysML");
+            MainRunner.umlNodes.put(calcId, action);
+            calcActions.put(calcId, action);
+            MainRunner.nameToIdMap.put(name, calcId);
+            System.out.println("[DEBUG] Created CallBehaviorAction: " + name + " [" + typeName + "]");
+        }
+
+        int edgeCount = createDependencyEdges(activity, ctx, topoOrder, calcActions,
+                calcDeps, calcIdToName, calcOutputToCalcId, calcOutputName);
+
+        // Start/End 节点
+        InitialNode startNode = (InitialNode) activity.createOwnedNode("Start", UMLPackage.Literals.INITIAL_NODE);
+        ActivityFinalNode endNode = (ActivityFinalNode) activity.createOwnedNode("End",
+                UMLPackage.Literals.ACTIVITY_FINAL_NODE);
+        MainRunner.umlNodes.put("START_NODE", startNode);
+        MainRunner.umlNodes.put("END_NODE", endNode);
+
+        if (!topoOrder.isEmpty()) {
+            ControlFlow startFlow = ctx.factory.createControlFlow();
+            activity.getEdges().add(startFlow);
+            startFlow.setSource(startNode);
+            startFlow.setTarget(calcActions.get(topoOrder.get(0)));
+            edgeCount++;
+
+            ControlFlow endFlow = ctx.factory.createControlFlow();
+            activity.getEdges().add(endFlow);
+            endFlow.setSource(calcActions.get(topoOrder.get(topoOrder.size() - 1)));
+            endFlow.setTarget(endNode);
+            edgeCount++;
+        }
+
+        System.out.println("[DEBUG] PASS C3 完成: " + calcActions.size()
+                + " 个节点, " + edgeCount + " 条边");
+    }
+
+    /** 创建 calc 之间的依赖边 (ObjectFlow) */
+    private static int createDependencyEdges(Activity activity, PipelineContext ctx,
+            List<String> topoOrder, Map<String, CallBehaviorAction> calcActions,
+            Map<String, List<String>> calcDeps, Map<String, String> calcIdToName,
+            Map<String, String> calcOutputToCalcId, Map<String, String> calcOutputName) {
+        int edgeCount = 0;
+        for (String calcId : topoOrder) {
+            CallBehaviorAction target = calcActions.get(calcId);
+            for (String depId : calcDeps.get(calcId)) {
+                CallBehaviorAction source = calcActions.get(depId);
+                if (source == null)
+                    continue;
+                ObjectFlow flow = ctx.factory.createObjectFlow();
+                activity.getEdges().add(flow);
+                flow.setSource(source);
+                flow.setTarget(target);
+                String depOutputName = calcOutputName.entrySet().stream()
+                        .filter(e -> depId.equals(e.getValue()))
+                        .map(Map.Entry::getKey)
+                        .map(calcOutputName::get)
+                        .findFirst().orElse("");
+                OpaqueExpression guardExpr = ctx.factory.createOpaqueExpression();
+                guardExpr.getBodies().add(depOutputName);
+                flow.setGuard(guardExpr);
+                edgeCount++;
+                System.out.println("[DEBUG] ObjectFlow: " + calcIdToName.get(depId)
+                        + "." + depOutputName + " → " + calcIdToName.get(calcId));
+            }
+        }
+        return edgeCount;
     }
 
     // ===== Calc Model 辅助方法 =====
