@@ -297,7 +297,8 @@ class Pass2Nodes {
                     typedList = java.util.Collections.singletonList(val);
                 }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
         if (ctx.firstActionId == null)
             ctx.firstActionId = id;
         actionNode = createActionNodeFromType(typedList, name, id, ctx);
@@ -344,9 +345,8 @@ class Pass2Nodes {
     }
 
     /** 从 ActionUsage 提取 InputPin/OutputPin 并注册到 ctx */
-    private static void extractPinsFromAction(EObject obj, String id, CallBehaviorAction cba,
-            OpaqueBehavior beh, Map<String, OutputPin> outPins, Map<String, InputPin> inPins,
-            PipelineContext ctx) {
+    private static void extractPinsFromAction(EObject obj, String id, CallBehaviorAction cba, OpaqueBehavior beh,
+            Map<String, OutputPin> outPins, Map<String, InputPin> inPins, PipelineContext ctx) {
         for (EObject child : obj.eContents()) {
             String childCn = child.eClass().getName();
             if (!"FeatureMembership".equals(childCn))
@@ -367,7 +367,8 @@ class Pass2Nodes {
                     if (paramEid != null) {
                         ctx.featureIdToPinInfo.put(paramEid, new String[]{id, paramName, direction});
                     }
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                }
 
                 if ("out".equals(direction)) {
                     OutputPin pin = UMLFactory.eINSTANCE.createOutputPin();
@@ -434,7 +435,8 @@ class Pass2Nodes {
                                             }
                                         }
                                     }
-                                } catch (Exception ignored) {}
+                                } catch (Exception ignored) {
+                                }
                             }
                         }
                     }
@@ -460,7 +462,8 @@ class Pass2Nodes {
                                                     }
                                                 }
                                             }
-                                        } catch (Exception ignored) {}
+                                        } catch (Exception ignored) {
+                                        }
                                     }
                                 }
                             }
@@ -475,9 +478,8 @@ class Pass2Nodes {
     }
 
     /** 从 ActionDefinition 继承父类型定义的参数 */
-    private static void inheritParametersFromDefinition(java.util.List<?> typedList, String id,
-            CallBehaviorAction cba, OpaqueBehavior beh, Map<String, InputPin> inPins,
-            Map<String, OutputPin> outPins, PipelineContext ctx) {
+    private static void inheritParametersFromDefinition(java.util.List<?> typedList, String id, CallBehaviorAction cba,
+            OpaqueBehavior beh, Map<String, InputPin> inPins, Map<String, OutputPin> outPins, PipelineContext ctx) {
         if (typedList == null || typedList.isEmpty() || !(typedList.get(0) instanceof EObject))
             return;
         EObject typeDef = (EObject) typedList.get(0);
@@ -500,8 +502,7 @@ class Pass2Nodes {
                     continue;
                 String defParamName = ((org.omg.sysml.lang.sysml.Element) defParam).getDeclaredName();
                 String defDirection = ExpressionUtils.getFeatureString(defParam, "direction");
-                if (defParamName == null || defParamName.isEmpty() || defDirection == null
-                        || defDirection.isEmpty())
+                if (defParamName == null || defParamName.isEmpty() || defDirection == null || defDirection.isEmpty())
                     continue;
                 if (inPins.containsKey(defParamName) || outPins.containsKey(defParamName))
                     continue;
@@ -524,10 +525,10 @@ class Pass2Nodes {
                     try {
                         String defParamEid = ((org.omg.sysml.lang.sysml.Element) defParam).getElementId();
                         if (defParamEid != null) {
-                            ctx.featureIdToPinInfo.put(defParamEid,
-                                    new String[]{id, defParamName, defDirection});
+                            ctx.featureIdToPinInfo.put(defParamEid, new String[]{id, defParamName, defDirection});
                         }
-                    } catch (Exception ignored) {}
+                    } catch (Exception ignored) {
+                    }
                 } else if ("out".equals(defDirection)) {
                     OutputPin pin = UMLFactory.eINSTANCE.createOutputPin();
                     pin.setName(defParamName);
@@ -547,10 +548,10 @@ class Pass2Nodes {
                     try {
                         String defParamEid = ((org.omg.sysml.lang.sysml.Element) defParam).getElementId();
                         if (defParamEid != null) {
-                            ctx.featureIdToPinInfo.put(defParamEid,
-                                    new String[]{id, defParamName, defDirection});
+                            ctx.featureIdToPinInfo.put(defParamEid, new String[]{id, defParamName, defDirection});
                         }
-                    } catch (Exception ignored) {}
+                    } catch (Exception ignored) {
+                    }
                 }
             }
         }
@@ -1088,11 +1089,14 @@ class Pass2Nodes {
 
         // ===== 构建内部控制流 =====
         if (isUntil) {
-            buildUntilLoopFlows(ctx, bodyNodeIds, ifDecisionIds, ifMergeIds, ifConditionTexts, ifThenBranchIds, merge, untilDecision);
+            buildUntilLoopFlows(ctx, bodyNodeIds, ifDecisionIds, ifMergeIds, ifConditionTexts, ifThenBranchIds, merge,
+                    untilDecision);
         } else if (hasWhile && hasUntil) {
-            buildWhileUntilLoopFlows(ctx, bodyNodeIds, ifDecisionIds, ifMergeIds, ifConditionTexts, ifThenBranchIds, merge, untilDecision, whileCondText, untilCondText, name, id);
+            buildWhileUntilLoopFlows(ctx, bodyNodeIds, ifDecisionIds, ifMergeIds, ifConditionTexts, ifThenBranchIds,
+                    merge, untilDecision, whileCondText, untilCondText, name, id);
         } else {
-            buildWhileLoopFlows(ctx, bodyNodeIds, ifDecisionIds, ifMergeIds, ifConditionTexts, ifThenBranchIds, merge, untilDecision, condText, name, id);
+            buildWhileLoopFlows(ctx, bodyNodeIds, ifDecisionIds, ifMergeIds, ifConditionTexts, ifThenBranchIds, merge,
+                    untilDecision, condText, name, id);
         }
     }
 
@@ -1109,7 +1113,8 @@ class Pass2Nodes {
                 String condFromPM = null;
                 for (java.util.Iterator<EObject> deepIt = child.eAllContents(); deepIt.hasNext();) {
                     EObject deep = deepIt.next();
-                    if (condFromPM != null) break;
+                    if (condFromPM != null)
+                        break;
                     String deepCn = deep.eClass().getName();
                     if (deepCn.contains("Expression")) {
                         String astText = ExpressionUtils.buildExpressionText(deep);
@@ -1127,8 +1132,10 @@ class Pass2Nodes {
                     }
                 }
                 if (condFromPM != null && !condFromPM.isEmpty()) {
-                    if (pmIdx == 1) whileCondText = condFromPM;
-                    else untilCondText = condFromPM;
+                    if (pmIdx == 1)
+                        whileCondText = condFromPM;
+                    else
+                        untilCondText = condFromPM;
                 }
             }
         }
@@ -1136,10 +1143,14 @@ class Pass2Nodes {
         boolean hasUntil = untilCondText != null && !untilCondText.isEmpty();
         boolean isUntil = hasUntil && !hasWhile;
         String condText;
-        if (hasUntil) condText = untilCondText;
-        else if (hasWhile) condText = whileCondText;
-        else condText = "";
-        return new String[]{whileCondText, untilCondText, String.valueOf(hasWhile), String.valueOf(hasUntil), condText, String.valueOf(isUntil)};
+        if (hasUntil)
+            condText = untilCondText;
+        else if (hasWhile)
+            condText = whileCondText;
+        else
+            condText = "";
+        return new String[]{whileCondText, untilCondText, String.valueOf(hasWhile), String.valueOf(hasUntil), condText,
+                String.valueOf(isUntil)};
     }
 
     /** 收集 WhileLoop body 内所有元素 */
@@ -1169,22 +1180,24 @@ class Pass2Nodes {
 
     /** until 循环控制流: Merge -> body -> untilDecision -> 回边 */
     private static void buildUntilLoopFlows(PipelineContext ctx, List<String> bodyNodeIds,
-            Map<String, String> ifDecisionIds, Map<String, String> ifMergeIds,
-            Map<String, String> ifConditionTexts, Map<String, List<String>> ifThenBranchIds,
-            MergeNode merge, DecisionNode untilDecision) {
+            Map<String, String> ifDecisionIds, Map<String, String> ifMergeIds, Map<String, String> ifConditionTexts,
+            Map<String, List<String>> ifThenBranchIds, MergeNode merge, DecisionNode untilDecision) {
         if (!bodyNodeIds.isEmpty()) {
             ControlFlow mergeToBody = UMLFactory.eINSTANCE.createControlFlow();
             mergeToBody.setSource(merge);
             mergeToBody.setTarget(MainRunner.umlNodes.get(bodyNodeIds.get(0)));
             ctx.activity.getEdges().add(mergeToBody);
 
-            LoopExpander.buildBodyInternalFlows(ctx.activity, bodyNodeIds, ifDecisionIds, ifMergeIds,
-                    ifConditionTexts, ifThenBranchIds, MainRunner.umlNodes, merge, untilDecision);
+            LoopExpander.buildBodyInternalFlows(ctx.activity, bodyNodeIds, ifDecisionIds, ifMergeIds, ifConditionTexts,
+                    ifThenBranchIds, MainRunner.umlNodes, merge, untilDecision);
 
             String lastBodyId = bodyNodeIds.get(bodyNodeIds.size() - 1);
             boolean lastIsIfDecision = false;
             for (String ifDecId : ifDecisionIds.values()) {
-                if (lastBodyId.equals(ifDecId)) { lastIsIfDecision = true; break; }
+                if (lastBodyId.equals(ifDecId)) {
+                    lastIsIfDecision = true;
+                    break;
+                }
             }
             if (!lastIsIfDecision) {
                 ControlFlow toUntilDec = UMLFactory.eINSTANCE.createControlFlow();
@@ -1204,10 +1217,9 @@ class Pass2Nodes {
 
     /** while+until 双条件循环控制流 */
     private static void buildWhileUntilLoopFlows(PipelineContext ctx, List<String> bodyNodeIds,
-            Map<String, String> ifDecisionIds, Map<String, String> ifMergeIds,
-            Map<String, String> ifConditionTexts, Map<String, List<String>> ifThenBranchIds,
-            MergeNode merge, DecisionNode untilDecision, String whileCondText, String untilCondText,
-            String name, String id) {
+            Map<String, String> ifDecisionIds, Map<String, String> ifMergeIds, Map<String, String> ifConditionTexts,
+            Map<String, List<String>> ifThenBranchIds, MergeNode merge, DecisionNode untilDecision,
+            String whileCondText, String untilCondText, String name, String id) {
         String whileDecId = id + "_whileEntryDecision";
         String whileDecName = whileCondText + "?";
         DecisionNode whileDecision = (DecisionNode) ctx.activity.createOwnedNode(whileDecName,
@@ -1231,13 +1243,16 @@ class Pass2Nodes {
         }
 
         if (!bodyNodeIds.isEmpty()) {
-            LoopExpander.buildBodyInternalFlows(ctx.activity, bodyNodeIds, ifDecisionIds, ifMergeIds,
-                    ifConditionTexts, ifThenBranchIds, MainRunner.umlNodes, merge, untilDecision);
+            LoopExpander.buildBodyInternalFlows(ctx.activity, bodyNodeIds, ifDecisionIds, ifMergeIds, ifConditionTexts,
+                    ifThenBranchIds, MainRunner.umlNodes, merge, untilDecision);
 
             String lastBodyId = bodyNodeIds.get(bodyNodeIds.size() - 1);
             boolean lastIsIfDecision = false;
             for (String ifDecId : ifDecisionIds.values()) {
-                if (lastBodyId.equals(ifDecId)) { lastIsIfDecision = true; break; }
+                if (lastBodyId.equals(ifDecId)) {
+                    lastIsIfDecision = true;
+                    break;
+                }
             }
             if (!lastIsIfDecision) {
                 ControlFlow toUntilDec = UMLFactory.eINSTANCE.createControlFlow();
@@ -1249,8 +1264,7 @@ class Pass2Nodes {
 
         String exitMergeId = id + "_whileUntilExitMerge";
         String exitMergeName = (name != null ? name : "Loop") + "_ExitMerge";
-        MergeNode exitMerge = (MergeNode) ctx.activity.createOwnedNode(exitMergeName,
-                UMLPackage.Literals.MERGE_NODE);
+        MergeNode exitMerge = (MergeNode) ctx.activity.createOwnedNode(exitMergeName, UMLPackage.Literals.MERGE_NODE);
         MainRunner.umlNodes.put(exitMergeId, exitMerge);
         MainRunner.whileLoopExitMergeIds.put(id, exitMergeId);
 
@@ -1278,15 +1292,18 @@ class Pass2Nodes {
         backEdge2.setGuard(backGuard2);
         ctx.activity.getEdges().add(backEdge2);
 
-        System.out.println("[WHILE-UNTIL] id=" + id.substring(0, Math.min(8, id.length())) + " while="
-                + whileCondText + " until=" + untilCondText);
+        System.out.println("[WHILE-UNTIL] id=" + id.substring(0, Math.min(8, id.length())) + " while=" + whileCondText
+                + " until=" + untilCondText);
     }
 
-    /** while 循环控制流: Merge -> Decision(body) -> body -> Merge(回边), Decision(else) -> ExitMerge */
+    /**
+     * while 循环控制流: Merge -> Decision(body) -> body -> Merge(回边), Decision(else) ->
+     * ExitMerge
+     */
     private static void buildWhileLoopFlows(PipelineContext ctx, List<String> bodyNodeIds,
-            Map<String, String> ifDecisionIds, Map<String, String> ifMergeIds,
-            Map<String, String> ifConditionTexts, Map<String, List<String>> ifThenBranchIds,
-            MergeNode merge, DecisionNode untilDecision, String condText, String name, String id) {
+            Map<String, String> ifDecisionIds, Map<String, String> ifMergeIds, Map<String, String> ifConditionTexts,
+            Map<String, List<String>> ifThenBranchIds, MergeNode merge, DecisionNode untilDecision, String condText,
+            String name, String id) {
         ControlFlow mergeToDec = UMLFactory.eINSTANCE.createControlFlow();
         mergeToDec.setSource(merge);
         mergeToDec.setTarget(untilDecision);
@@ -1316,13 +1333,16 @@ class Pass2Nodes {
             trueBranch.setGuard(trueGuard);
             ctx.activity.getEdges().add(trueBranch);
 
-            LoopExpander.buildBodyInternalFlows(ctx.activity, bodyNodeIds, ifDecisionIds, ifMergeIds,
-                    ifConditionTexts, ifThenBranchIds, MainRunner.umlNodes, merge, null);
+            LoopExpander.buildBodyInternalFlows(ctx.activity, bodyNodeIds, ifDecisionIds, ifMergeIds, ifConditionTexts,
+                    ifThenBranchIds, MainRunner.umlNodes, merge, null);
 
             String lastBodyId = bodyNodeIds.get(bodyNodeIds.size() - 1);
             boolean lastIsIfDecision = false;
             for (String ifDecId : ifDecisionIds.values()) {
-                if (lastBodyId.equals(ifDecId)) { lastIsIfDecision = true; break; }
+                if (lastBodyId.equals(ifDecId)) {
+                    lastIsIfDecision = true;
+                    break;
+                }
             }
             if (!lastIsIfDecision) {
                 ControlFlow backEdge = UMLFactory.eINSTANCE.createControlFlow();
@@ -1800,15 +1820,13 @@ class Pass2Nodes {
                     if (refCn.contains("ReferenceUsage") || refCn.contains("Feature")) {
                         for (EObject sub : refUsage.eContents()) {
                             if (sub.eClass().getName().equals("ReferenceSubsetting")) {
-                                EStructuralFeature rfFeat = sub.eClass()
-                                        .getEStructuralFeature("referencedFeature");
+                                EStructuralFeature rfFeat = sub.eClass().getEStructuralFeature("referencedFeature");
                                 if (rfFeat != null) {
                                     Object refObj = sub.eGet(rfFeat);
                                     if (refObj instanceof EObject) {
                                         EObject resolved = EcoreUtil.resolve((EObject) refObj, sub);
                                         if (resolved instanceof org.omg.sysml.lang.sysml.Element) {
-                                            String refId = ((org.omg.sysml.lang.sysml.Element) resolved)
-                                                    .getElementId();
+                                            String refId = ((org.omg.sysml.lang.sysml.Element) resolved).getElementId();
                                             if (refId != null) {
                                                 endFeatureIds.add(refId);
                                             }
@@ -1826,14 +1844,16 @@ class Pass2Nodes {
                                                     if (cfFeat != null) {
                                                         Object cfVal = fcc.eGet(cfFeat);
                                                         if (cfVal instanceof EObject) {
-                                                            EObject cfResolved = EcoreUtil.resolve((EObject) cfVal, fcc);
+                                                            EObject cfResolved = EcoreUtil.resolve((EObject) cfVal,
+                                                                    fcc);
                                                             if (cfResolved instanceof org.omg.sysml.lang.sysml.Element) {
                                                                 lastChainId = ((org.omg.sysml.lang.sysml.Element) cfResolved)
                                                                         .getElementId();
                                                             }
                                                         }
                                                     }
-                                                } catch (Exception ignored) {}
+                                                } catch (Exception ignored) {
+                                                }
                                             }
                                         }
                                         try {
@@ -1841,7 +1861,8 @@ class Pass2Nodes {
                                             if (fcId != null && lastChainId == null) {
                                                 lastChainId = fcId;
                                             }
-                                        } catch (Exception ignored) {}
+                                        } catch (Exception ignored) {
+                                        }
                                     }
                                 }
                                 if (lastChainId != null && !endFeatureIds.contains(lastChainId)) {
@@ -1859,13 +1880,15 @@ class Pass2Nodes {
             if (end1 == null && endFeatureIds.size() > 2) {
                 for (String eid : endFeatureIds.subList(2, endFeatureIds.size())) {
                     end1 = ctx.featureIdToPinInfo.get(eid);
-                    if (end1 != null) break;
+                    if (end1 != null)
+                        break;
                 }
             }
             if (end2 == null && endFeatureIds.size() > 2) {
                 for (String eid : endFeatureIds.subList(2, endFeatureIds.size())) {
                     end2 = ctx.featureIdToPinInfo.get(eid);
-                    if (end2 != null) break;
+                    if (end2 != null)
+                        break;
                 }
             }
             if (end1 != null && end2 != null) {
@@ -1876,7 +1899,8 @@ class Pass2Nodes {
         String bcId = null;
         try {
             bcId = ((org.omg.sysml.lang.sysml.Element) obj).getElementId();
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
         if (bcId != null) {
             ctx.processedStructuralIds.add(bcId);
         }
@@ -1965,7 +1989,8 @@ class Pass2Nodes {
         ctx.processedStructuralIds.add(id);
         MainRunner.nameToIdMap.put(structName, id);
 
-        // 提取属性 (FeatureMembership -> AttributeUsage/ReferenceUsage/PartUsage/PortUsage/ItemUsage)
+        // 提取属性 (FeatureMembership ->
+        // AttributeUsage/ReferenceUsage/PartUsage/PortUsage/ItemUsage)
         for (EObject child : obj.eContents()) {
             if (child.eClass().getName().equals("FeatureMembership")) {
                 for (EObject attr : child.eContents()) {
@@ -2121,7 +2146,8 @@ class Pass2Nodes {
                                                                         .getElementId();
                                                             }
                                                         }
-                                                    } catch (Exception ignored) {}
+                                                    } catch (Exception ignored) {
+                                                    }
                                                 }
                                             }
                                         }
@@ -2150,7 +2176,8 @@ class Pass2Nodes {
                                             srcStateId = ((org.omg.sysml.lang.sysml.Element) meVal).getElementId();
                                         }
                                     }
-                                } catch (Exception ignored) {}
+                                } catch (Exception ignored) {
+                                }
                             }
                             // Trigger: TransitionFeatureMembership(kind=trigger) ->
                             // AcceptActionUsage -> ParameterMembership -> ReferenceUsage -> FeatureTyping
@@ -2175,7 +2202,8 @@ class Pass2Nodes {
                                                                                         .getDeclaredName();
                                                                             }
                                                                         }
-                                                                    } catch (Exception ignored) {}
+                                                                    } catch (Exception ignored) {
+                                                                    }
                                                                 }
                                                             }
                                                         }
@@ -2200,8 +2228,8 @@ class Pass2Nodes {
                                                                 if (rs.eClass().getName()
                                                                         .equals("ReferenceSubsetting")) {
                                                                     try {
-                                                                        var rfFeat = rs.eClass()
-                                                                                .getEStructuralFeature("referencedFeature");
+                                                                        var rfFeat = rs.eClass().getEStructuralFeature(
+                                                                                "referencedFeature");
                                                                         if (rfFeat != null) {
                                                                             Object rfVal = rs.eGet(rfFeat);
                                                                             if (rfVal instanceof EObject) {
@@ -2209,7 +2237,8 @@ class Pass2Nodes {
                                                                                         .getElementId();
                                                                             }
                                                                         }
-                                                                    } catch (Exception ignored) {}
+                                                                    } catch (Exception ignored) {
+                                                                    }
                                                                 }
                                                             }
                                                         }
@@ -2313,7 +2342,8 @@ class Pass2Nodes {
                         break;
                     }
                 }
-                if (loopVarName != null) break;
+                if (loopVarName != null)
+                    break;
             }
         }
         String rangeText = null;
@@ -2333,9 +2363,11 @@ class Pass2Nodes {
                                                     var valFeat = litObj.eClass().getEStructuralFeature("value");
                                                     if (valFeat != null) {
                                                         Object val = litObj.eGet(valFeat);
-                                                        if (val != null) literals.add(val.toString());
+                                                        if (val != null)
+                                                            literals.add(val.toString());
                                                     }
-                                                } catch (Exception ignored) {}
+                                                } catch (Exception ignored) {
+                                                }
                                             }
                                         }
                                         if (!literals.isEmpty()) {
@@ -2363,7 +2395,8 @@ class Pass2Nodes {
                 if (pmCount == 2) {
                     for (EObject gc : dc.eContents()) {
                         String gcClass = gc.eClass().getName();
-                        if (!(gc instanceof org.omg.sysml.lang.sysml.Element)) continue;
+                        if (!(gc instanceof org.omg.sysml.lang.sysml.Element))
+                            continue;
                         String gcId = ((org.omg.sysml.lang.sysml.Element) gc).getElementId();
                         if (gcClass.contains("ActionUsage") || gcClass.contains("AssignmentActionUsage")) {
                             EObject nestedLoop = null;
@@ -2371,7 +2404,8 @@ class Pass2Nodes {
                                 String innerCn = inner.eClass().getName();
                                 if ("ForLoopActionUsage".equals(innerCn) || "WhileLoopActionUsage".equals(innerCn)
                                         || "LoopActionUsage".equals(innerCn)) {
-                                    nestedLoop = inner; break;
+                                    nestedLoop = inner;
+                                    break;
                                 }
                             }
                             if (nestedLoop != null) {
@@ -2380,9 +2414,11 @@ class Pass2Nodes {
                                 if ("ForLoopActionUsage".equals(nc))
                                     res = LoopExpander.expandNestedForLoop(ctx.activity, nestedLoop, ctx.sysmlBasePath);
                                 else if ("WhileLoopActionUsage".equals(nc))
-                                    res = LoopExpander.expandNestedWhileLoop(ctx.activity, nestedLoop, ctx.sysmlBasePath);
+                                    res = LoopExpander.expandNestedWhileLoop(ctx.activity, nestedLoop,
+                                            ctx.sysmlBasePath);
                                 else
-                                    res = LoopExpander.expandNestedLoopAction(ctx.activity, nestedLoop, ctx.sysmlBasePath);
+                                    res = LoopExpander.expandNestedLoopAction(ctx.activity, nestedLoop,
+                                            ctx.sysmlBasePath);
                                 bodyActionId = res[0];
                                 MainRunner.logicalEdges.add(new MainRunner.EdgeData(mergeId, res[0]));
                                 MainRunner.logicalEdges.add(new MainRunner.EdgeData(res[1], mergeId));
@@ -2390,7 +2426,8 @@ class Pass2Nodes {
                                     EObject d = it.next();
                                     if (d instanceof org.omg.sysml.lang.sysml.Element) {
                                         String dId = ((org.omg.sysml.lang.sysml.Element) d).getElementId();
-                                        if (dId != null) MainRunner.loopBodyNodeIds.add(dId);
+                                        if (dId != null)
+                                            MainRunner.loopBodyNodeIds.add(dId);
                                     }
                                 }
                                 break;
@@ -2398,7 +2435,8 @@ class Pass2Nodes {
                             EObject bodyObj = gc;
                             for (EObject inner : gc.eContents()) {
                                 if (inner.eClass().getName().contains("AssignmentActionUsage")) {
-                                    bodyObj = inner; break;
+                                    bodyObj = inner;
+                                    break;
                                 }
                             }
                             String expr = ExpressionUtils.extractAssignmentText(bodyObj);
@@ -2414,7 +2452,8 @@ class Pass2Nodes {
                             if (!expr.isEmpty() && expr.contains("=")) {
                                 bodyNode = UmlHelper.createOpaqueActionForAssignment(ctx.activity, nodeName, expr);
                             } else {
-                                bodyNode = UmlHelper.createCallBehaviorActionWithBody(ctx.activity, nodeName, bodyText, "SysMLv2");
+                                bodyNode = UmlHelper.createCallBehaviorActionWithBody(ctx.activity, nodeName, bodyText,
+                                        "SysMLv2");
                             }
                             MainRunner.umlNodes.put(gcId, bodyNode);
                             MainRunner.uuidToNameMap.put(gcId, nodeName);
@@ -2448,7 +2487,8 @@ class Pass2Nodes {
                         break;
                     }
                 }
-                if (conditionText != null) break;
+                if (conditionText != null)
+                    break;
             }
         }
         // 方法1: .sysml 正则提取
@@ -2467,7 +2507,8 @@ class Pass2Nodes {
                     matchIdx++;
                 }
                 ctx.consumedIfRegexCount++;
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
         if (conditionText == null || conditionText.isEmpty()) {
             conditionText = "true";
@@ -2485,7 +2526,8 @@ class Pass2Nodes {
         for (int pmIdx = 1; pmIdx < paramMemberships.size(); pmIdx++) {
             EObject pm = paramMemberships.get(pmIdx);
             for (EObject gc : pm.eContents()) {
-                if (!(gc instanceof org.omg.sysml.lang.sysml.Element)) continue;
+                if (!(gc instanceof org.omg.sysml.lang.sysml.Element))
+                    continue;
                 String gcClass = gc.eClass().getName();
                 String gcId = ((org.omg.sysml.lang.sysml.Element) gc).getElementId();
                 if (gcClass.contains("IfActionUsage")) {
@@ -2498,7 +2540,8 @@ class Pass2Nodes {
                     for (EObject deepGc : gc.eContents()) {
                         if (deepGc.eClass().getName().contains("IfActionUsage")
                                 && !deepGc.eClass().getName().contains("While")) {
-                            nestedIfInBranch = deepGc; break;
+                            nestedIfInBranch = deepGc;
+                            break;
                         }
                     }
                     if (nestedIfInBranch != null) {
@@ -2514,7 +2557,8 @@ class Pass2Nodes {
                         String expr = ExpressionUtils.extractAssignmentText(gc);
                         String nodeName, bodyText;
                         if (gcName != null && !gcName.isEmpty()) {
-                            nodeName = gcName; bodyText = null;
+                            nodeName = gcName;
+                            bodyText = null;
                         } else if (!expr.isEmpty()) {
                             nodeName = expr.replaceAll("[^a-zA-Z0-9_]", "_");
                             bodyText = expr;
@@ -2526,7 +2570,8 @@ class Pass2Nodes {
                         if (bodyText != null && !bodyText.isEmpty() && bodyText.contains("=")) {
                             branchNode = UmlHelper.createOpaqueActionForAssignment(ctx.activity, nodeName, bodyText);
                         } else {
-                            branchNode = UmlHelper.createCallBehaviorActionWithBody(ctx.activity, nodeName, bodyText, "SysMLv2");
+                            branchNode = UmlHelper.createCallBehaviorActionWithBody(ctx.activity, nodeName, bodyText,
+                                    "SysMLv2");
                         }
                         MainRunner.umlNodes.put(gcId, branchNode);
                         MainRunner.uuidToNameMap.put(gcId, nodeName);
@@ -2563,7 +2608,8 @@ class Pass2Nodes {
                     }
                 }
             }
-            if (guardText != null) break;
+            if (guardText != null)
+                break;
         }
         // Fallback: .sysml regex
         if (guardText == null || guardText.isEmpty()) {
@@ -2573,11 +2619,13 @@ class Pass2Nodes {
                 int count = 0;
                 while (m.find()) {
                     if (count == ctx.decideDeferredEdges.size()) {
-                        guardText = m.group(1).trim(); break;
+                        guardText = m.group(1).trim();
+                        break;
                     }
                     count++;
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
         return guardText;
     }
@@ -2611,16 +2659,22 @@ class Pass2Nodes {
                                                             if (rfFeat != null) {
                                                                 Object rfVal = rs.eGet(rfFeat);
                                                                 if (rfVal instanceof EObject) {
-                                                                    rfVal = EcoreUtil.resolve((EObject) rfVal, ctx.resourceSet);
+                                                                    rfVal = EcoreUtil.resolve((EObject) rfVal,
+                                                                            ctx.resourceSet);
                                                                     if (rfVal instanceof org.omg.sysml.lang.sysml.Element) {
-                                                                        condSuccTgtId = ((org.omg.sysml.lang.sysml.Element) rfVal).getElementId();
-                                                                        targetName = ((org.omg.sysml.lang.sysml.Element) rfVal).getDeclaredName();
-                                                                        System.out.println("[DEBUG] TransitionUsage: XMI target = "
-                                                                                + targetName + " (id=" + condSuccTgtId + ")");
+                                                                        condSuccTgtId = ((org.omg.sysml.lang.sysml.Element) rfVal)
+                                                                                .getElementId();
+                                                                        targetName = ((org.omg.sysml.lang.sysml.Element) rfVal)
+                                                                                .getDeclaredName();
+                                                                        System.out.println(
+                                                                                "[DEBUG] TransitionUsage: XMI target = "
+                                                                                        + targetName + " (id="
+                                                                                        + condSuccTgtId + ")");
                                                                     }
                                                                 }
                                                             }
-                                                        } catch (Exception ignored) {}
+                                                        } catch (Exception ignored) {
+                                                        }
                                                     }
                                                 }
                                             }
