@@ -36,7 +36,11 @@ class Pass5Assembly {
                     if (deepCn.contains("BindingConnector")) {
                         // 去重: 同一个 BindingConnector 只处理一次
                         String deepId = null;
-                        try { deepId = ((org.omg.sysml.lang.sysml.Element) deep).getElementId(); } catch (Exception ignored) {}
+                        try {
+                            deepId = ((org.omg.sysml.lang.sysml.Element) deep).getElementId();
+                        } catch (Exception ignored) {
+                            // ignored
+                        }
                         if (deepId != null && !processedBindConnectorIds.add(deepId)) continue;
 
                         List<String> endFeatureIds = new ArrayList<>();
@@ -55,7 +59,9 @@ class Pass5Assembly {
                                                         EObject resolved = EcoreUtil.resolve((EObject) refObj, sub);
                                                         if (resolved instanceof org.omg.sysml.lang.sysml.Element) {
                                                             String refId = ((org.omg.sysml.lang.sysml.Element) resolved).getElementId();
-                                                            if (refId != null) endFeatureIds.add(refId);
+                                                            if (refId != null) {
+                                                                endFeatureIds.add(refId);
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -76,13 +82,19 @@ class Pass5Assembly {
                                                                             }
                                                                         }
                                                                     }
-                                                                } catch (Exception ignored) {}
+                                                                } catch (Exception ignored) {
+                                                                    // ignored
+                                                                }
                                                             }
                                                         }
                                                         try {
                                                             String fcId = ((org.omg.sysml.lang.sysml.Element) fc).getElementId();
-                                                            if (fcId != null && lastChainId == null) lastChainId = fcId;
-                                                        } catch (Exception ignored) {}
+                                                            if (fcId != null && lastChainId == null) {
+                                                                lastChainId = fcId;
+                                                            }
+                                                        } catch (Exception ignored) {
+                                                            // ignored
+                                                        }
                                                     }
                                                 }
                                                 if (lastChainId != null && !endFeatureIds.contains(lastChainId)) {
@@ -101,13 +113,17 @@ class Pass5Assembly {
                             if (end1 == null && endFeatureIds.size() > 2) {
                                 for (String eid : endFeatureIds.subList(2, endFeatureIds.size())) {
                                     end1 = ctx.featureIdToPinInfo.get(eid);
-                                    if (end1 != null) break;
+                                    if (end1 != null) {
+                                        break;
+                                    }
                                 }
                             }
                             if (end2 == null && endFeatureIds.size() > 2) {
                                 for (String eid : endFeatureIds.subList(2, endFeatureIds.size())) {
                                     end2 = ctx.featureIdToPinInfo.get(eid);
-                                    if (end2 != null) break;
+                                    if (end2 != null) {
+                                        break;
+                                    }
                                 }
                             }
                             if (end1 != null && end2 != null) {

@@ -103,7 +103,9 @@ class Pass4Routing {
         String decisionId = MainRunner.loopEndDecision.get(loopId);
         String condition = MainRunner.loopConditionText.get(loopId);
         List<String> bodyActions = MainRunner.loopBodyActions.get(loopId);
-        if (bodyActions == null) continue;
+        if (bodyActions == null) {
+            continue;
+        }
 
         for (String actionId : bodyActions) {
             boolean hasOutToBody = false;
@@ -166,7 +168,9 @@ class Pass4Routing {
         String decId = MainRunner.whileLoopDecisionIds.get(whileId);
         String mergeId = MainRunner.whileLoopMergeIds.get(whileId);
         ActivityNode decNode = MainRunner.umlNodes.get(decId);
-        if (decNode == null) continue;
+        if (decNode == null) {
+            continue;
+        }
         
         // 添加 Start → WhileLoop MergeNode 连接 (关键修复!)
         // 跳过 while+until 双条件循环 (顺序链连接入口 DecisionNode, 而非 MergeNode)
@@ -293,11 +297,15 @@ class Pass4Routing {
                 EObject scanObj = scanIt.next();
                 if (!(scanObj instanceof org.omg.sysml.lang.sysml.Element)) continue;
                 String scanClass = scanObj.eClass().getName();
-                if (!scanClass.contains("ActionUsage") && !scanClass.contains("ActionDefinition")) continue;
+                if (!scanClass.contains("ActionUsage") && !scanClass.contains("ActionDefinition")) {
+                    continue;
+                }
                 // Look at direct ownedRelationship children (top-level of the action)
                 try {
                     var orFeat = scanObj.eClass().getEStructuralFeature("ownedRelationship");
-                    if (orFeat == null) continue;
+                    if (orFeat == null) {
+                        continue;
+                    }
                     Object orVal = scanObj.eGet(orFeat);
                     if (!(orVal instanceof List)) continue;
                     List<?> children = (List<?>) orVal;
@@ -334,11 +342,17 @@ class Pass4Routing {
                             } else if (cc.contains("WhileLoopActionUsage")) {
                                 // while+until: 入口是 whileEntryDecision; 纯 while: 入口是 MergeNode
                                 String entry = MainRunner.whileLoopEntryIds.get(cId);
-                                if (entry == null) entry = MainRunner.whileLoopMergeIds.get(cId);
+                                if (entry == null) {
+                                    entry = MainRunner.whileLoopMergeIds.get(cId);
+                                }
                                 // while+until: 出口是 exitMerge; 纯 while: 出口是 pureExitMerge; fallback: DecisionNode
                                 String exit = MainRunner.whileLoopExitMergeIds.get(cId);
-                                if (exit == null) exit = MainRunner.whileLoopPureExitMergeIds.get(cId);
-                                if (exit == null) exit = MainRunner.whileLoopDecisionIds.get(cId);
+                                if (exit == null) {
+                                    exit = MainRunner.whileLoopPureExitMergeIds.get(cId);
+                                }
+                                if (exit == null) {
+                                    exit = MainRunner.whileLoopDecisionIds.get(cId);
+                                }
                                 if (entry != null && exit != null && MainRunner.umlNodes.containsKey(entry) && MainRunner.umlNodes.containsKey(exit)) {
                                     chainConstructs.add(new String[]{cId, entry, exit});
                                 }
@@ -502,24 +516,40 @@ class Pass4Routing {
     boolean endConnected = false;
     for (String nodeId : MainRunner.umlNodes.keySet()) {
         ActivityNode node = MainRunner.umlNodes.get(nodeId);
-        if (node == startNode || node == endNode) continue;
-        if (node instanceof ForkNode || node instanceof JoinNode || node instanceof MergeNode || node instanceof DecisionNode || node instanceof InitialNode || node instanceof ActivityFinalNode) continue;
+        if (node == startNode || node == endNode) {
+            continue;
+        }
+        if (node instanceof ForkNode || node instanceof JoinNode || node instanceof MergeNode
+                || node instanceof DecisionNode || node instanceof InitialNode
+                || node instanceof ActivityFinalNode) {
+            continue;
+        }
         // 跳过 LoopNode/StructuredActivityNode 内部节点
-        if (node.eContainer() instanceof org.eclipse.uml2.uml.StructuredActivityNode) continue;
+        if (node.eContainer() instanceof org.eclipse.uml2.uml.StructuredActivityNode) {
+            continue;
+        }
         // 跳过 WhileLoop 展开的 body 节点 (_body0, _body1 等)
-        if (nodeId.matches(".*_body\\d+$")) continue;
+        if (nodeId.matches(".*_body\\d+$")) {
+            continue;
+        }
         // 跳过 loop body 节点 (monitor, addCharge 等)
-        if (MainRunner.loopBodyNodeIds.contains(nodeId)) continue;
+        if (MainRunner.loopBodyNodeIds.contains(nodeId)) {
+            continue;
+        }
         boolean hasIn = inDeg.containsKey(nodeId) && inDeg.get(nodeId) > 0;
         if (!hasIn && !ctx.typedActionIds.contains(nodeId)) {
-            ControlFlow f = ctx.factory.createControlFlow(); ctx.activity.getEdges().add(f);
-            f.setSource(startNode); f.setTarget(node);
+            ControlFlow f = ctx.factory.createControlFlow();
+            ctx.activity.getEdges().add(f);
+            f.setSource(startNode);
+            f.setTarget(node);
             startConnected = true;
         }
         boolean hasOut = outDeg.containsKey(nodeId) && outDeg.get(nodeId) > 0;
         if (!hasOut) {
-            ControlFlow f = ctx.factory.createControlFlow(); ctx.activity.getEdges().add(f);
-            f.setSource(node); f.setTarget(endNode);
+            ControlFlow f = ctx.factory.createControlFlow();
+            ctx.activity.getEdges().add(f);
+            f.setSource(node);
+            f.setTarget(endNode);
             endConnected = true;
         }
     }
@@ -527,9 +557,17 @@ class Pass4Routing {
     if (!startConnected) {
         for (String nodeId : MainRunner.umlNodes.keySet()) {
             ActivityNode node = MainRunner.umlNodes.get(nodeId);
-            if (node == startNode || node == endNode) continue;
-            if (node instanceof ForkNode || node instanceof JoinNode || node instanceof MergeNode || node instanceof DecisionNode || node instanceof InitialNode || node instanceof ActivityFinalNode) continue;
-            if (node.eContainer() instanceof org.eclipse.uml2.uml.StructuredActivityNode) continue;
+            if (node == startNode || node == endNode) {
+                continue;
+            }
+            if (node instanceof ForkNode || node instanceof JoinNode || node instanceof MergeNode
+                    || node instanceof DecisionNode || node instanceof InitialNode
+                    || node instanceof ActivityFinalNode) {
+                continue;
+            }
+            if (node.eContainer() instanceof org.eclipse.uml2.uml.StructuredActivityNode) {
+                continue;
+            }
             if (nodeId.matches(".*_body\\d+$")) continue;
             if (MainRunner.loopBodyNodeIds.contains(nodeId)) continue;
             boolean hasIn = inDeg.containsKey(nodeId) && inDeg.get(nodeId) > 0;
@@ -542,9 +580,17 @@ class Pass4Routing {
     if (!endConnected) {
         for (String nodeId : MainRunner.umlNodes.keySet()) {
             ActivityNode node = MainRunner.umlNodes.get(nodeId);
-            if (node == startNode || node == endNode) continue;
-            if (node instanceof ForkNode || node instanceof JoinNode || node instanceof MergeNode || node instanceof DecisionNode || node instanceof InitialNode || node instanceof ActivityFinalNode) continue;
-            if (node.eContainer() instanceof org.eclipse.uml2.uml.StructuredActivityNode) continue;
+            if (node == startNode || node == endNode) {
+                continue;
+            }
+            if (node instanceof ForkNode || node instanceof JoinNode || node instanceof MergeNode
+                    || node instanceof DecisionNode || node instanceof InitialNode
+                    || node instanceof ActivityFinalNode) {
+                continue;
+            }
+            if (node.eContainer() instanceof org.eclipse.uml2.uml.StructuredActivityNode) {
+                continue;
+            }
             if (nodeId.matches(".*_body\\d+$")) continue;
             if (MainRunner.loopBodyNodeIds.contains(nodeId)) continue;
             boolean hasOut = outDeg.containsKey(nodeId) && outDeg.get(nodeId) > 0;

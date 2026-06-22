@@ -84,15 +84,26 @@ public class MainRunner {
         String source;
         String target;
         String guard;
-        EdgeData(String s, String t) { source = s; target = t; this.guard = null; }
-        EdgeData(String s, String t, String g) { source = s; target = t; this.guard = g; }
+        EdgeData(String s, String t) {
+            source = s;
+            target = t;
+            this.guard = null;
+        }
+
+        EdgeData(String s, String t, String g) {
+            source = s;
+            target = t;
+            this.guard = g;
+        }
     }
 
     // =====================================================================
     // getFeatureString — 被 CalcModel 引用的工具方法
     // =====================================================================
     static String getFeatureString(EObject obj, String featureName) {
-        if (obj == null || featureName == null) return null;
+        if (obj == null || featureName == null) {
+            return null;
+        }
         for (EStructuralFeature feat : obj.eClass().getEAllStructuralFeatures()) {
             if (feat.getName().equals(featureName)) {
                 try {
@@ -113,7 +124,8 @@ public class MainRunner {
     public void executePureXMLPipeline() {
 
         // 1. 你的输入文本文件 (.sysml)
-        String sysmlPath = "D:\\about_computer\\software_engineering\\sysml-master\\git\\SysML-v2-Pilot-Implementation\\org.omg.sysml.xpect.tests\\src\\sysml2uml\\StructuredControlTest.sysml";
+        String sysmlPath = "D:\\about_computer\\software_engineering\\sysml-master\\git\\"
+                + "SysML-v2-Pilot-Implementation\\org.omg.sysml.xpect.tests\\src\\sysml2uml\\StructuredControlTest.sysml";
 
         // 2. 路径自动推导
         int dotIndex = sysmlPath.lastIndexOf(".");
@@ -136,7 +148,8 @@ public class MainRunner {
             // 从 runner.properties 读取 java.exe 路径和 phase0 classpath
             java.util.Properties props = new java.util.Properties();
             java.nio.file.Path propsPath = java.nio.file.Paths.get(
-                "D:\\about_computer\\software_engineering\\sysml-master\\git\\SysML-v2-Pilot-Implementation\\org.omg.sysml.xpect.tests\\src\\sysml2uml\\runner.properties");
+                    "D:\\about_computer\\software_engineering\\sysml-master\\git\\"
+                    + "SysML-v2-Pilot-Implementation\\org.omg.sysml.xpect.tests\\src\\sysml2uml\\runner.properties");
             try (java.io.InputStream is = java.nio.file.Files.newInputStream(propsPath)) {
                 props.load(is);
             }
@@ -241,7 +254,9 @@ public class MainRunner {
         String sysmlBasePath = xmiPath;
         try {
             sysmlBasePath = java.net.URLDecoder.decode(xmiPath, "UTF-8");
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+            // ignored
+        }
         File xmiFile = new File(xmiPath);
         if (!xmiFile.exists()) {
             System.err.println("XMI file not found: " + xmiPath);

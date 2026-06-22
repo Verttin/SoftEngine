@@ -49,11 +49,15 @@ class CalcModel {
             Iterator<EObject> iterator = ctx.resource.getAllContents();
             while (iterator.hasNext()) {
                 EObject obj = iterator.next();
-                if (!(obj instanceof org.omg.sysml.lang.sysml.Element)) continue;
+                if (!(obj instanceof org.omg.sysml.lang.sysml.Element)) {
+                    continue;
+                }
                 String eid = ((org.omg.sysml.lang.sysml.Element) obj).getElementId();
                 String dn = ((org.omg.sysml.lang.sysml.Element) obj).getDeclaredName();
                 String cn = obj.eClass().getName();
-                if (eid == null || dn == null) continue;
+                if (eid == null || dn == null) {
+                    continue;
+                }
 
                 if ("AttributeUsage".equals(cn)) {
                     String typeName = getFeatureTypeName(obj);
@@ -68,7 +72,9 @@ class CalcModel {
                             isCalcParam = true;
                             break;
                         }
-                        if ("ActionUsage".equals(container.eClass().getName())) break;
+                        if ("ActionUsage".equals(container.eClass().getName())) {
+                            break;
+                        }
                         container = container.eContainer();
                     }
                     if (!isCalcParam && !dir.isEmpty()) {
@@ -88,9 +94,13 @@ class CalcModel {
                 iterator = ctx.resource.getAllContents();
                 while (iterator.hasNext()) {
                     EObject obj = iterator.next();
-                    if (!(obj instanceof org.omg.sysml.lang.sysml.Element)) continue;
+                    if (!(obj instanceof org.omg.sysml.lang.sysml.Element)) {
+                        continue;
+                    }
                     String eid = ((org.omg.sysml.lang.sysml.Element) obj).getElementId();
-                    if (!calcId.equals(eid)) continue;
+                    if (!calcId.equals(eid)) {
+                        continue;
+                    }
                     // 找到 calc, 递归搜索 ReturnParameterMembership
                     findAndRegisterOutputs(obj, calcId, calcOutputToCalcId, calcOutputName);
                     break;
@@ -106,49 +116,71 @@ class CalcModel {
             //       calcInputDetails[calcId] = [{paramName, kind, detail}]
             Map<String, List<String>> calcDeps = new HashMap<>();
             Map<String, List<String[]>> calcInputDetails = new HashMap<>();
-            for (String cid : calcIds) { calcDeps.put(cid, new ArrayList<>()); calcInputDetails.put(cid, new ArrayList<>()); }
+            for (String cid : calcIds) {
+                calcDeps.put(cid, new ArrayList<>());
+                calcInputDetails.put(cid, new ArrayList<>());
+            }
 
             for (String calcId : calcIds) {
                 iterator = ctx.resource.getAllContents();
                 while (iterator.hasNext()) {
                     EObject obj = iterator.next();
-                    if (!(obj instanceof org.omg.sysml.lang.sysml.Element)) continue;
-                    if (!calcId.equals(((org.omg.sysml.lang.sysml.Element) obj).getElementId())) continue;
+                    if (!(obj instanceof org.omg.sysml.lang.sysml.Element)) {
+                        continue;
+                    }
+                    if (!calcId.equals(((org.omg.sysml.lang.sysml.Element) obj).getElementId())) {
+                        continue;
+                    }
                     // 遍历 FeatureMembership 子元素找 input ReferenceUsage
                     for (EObject fm : obj.eContents()) {
-                        if (!"FeatureMembership".equals(fm.eClass().getName())) continue;
+                        if (!"FeatureMembership".equals(fm.eClass().getName())) {
+                            continue;
+                        }
                         for (EObject ru : fm.eContents()) {
-                            if (!"ReferenceUsage".equals(ru.eClass().getName())) continue;
+                            if (!"ReferenceUsage".equals(ru.eClass().getName())) {
+                                continue;
+                            }
                             String paramName = ((org.omg.sysml.lang.sysml.Element) ru).getDeclaredName();
                             String dir = getFeatureValue(ru, "direction");
-                            if (!"in".equals(dir)) continue;
+                            if (!"in".equals(dir)) {
+                                continue;
+                            }
                             // 找到 FeatureValue → 表达式
                             for (EObject fv : ru.eContents()) {
-                                if (!"FeatureValue".equals(fv.eClass().getName())) continue;
+                                if (!"FeatureValue".equals(fv.eClass().getName())) {
+                                    continue;
+                                }
                                 for (EObject expr : fv.eContents()) {
                                     String exprType = expr.eClass().getName();
                                     if ("FeatureReferenceExpression".equals(exprType)) {
                                         String memberId = getMemberElementId(expr);
                                         String memberName = memberId != null ? globalIdToName.get(memberId) : null;
-                                        calcInputDetails.get(calcId).add(new String[]{paramName, "DIRECT_REF", memberId, memberName});
+                                        calcInputDetails.get(calcId).add(
+                                            new String[]{paramName, "DIRECT_REF", memberId, memberName});
                                         // 检查是否是另一个 calc 的 output
                                         if (memberId != null && calcOutputToCalcId.containsKey(memberId)) {
                                             String srcCalc = calcOutputToCalcId.get(memberId);
-                                            if (!calcDeps.get(calcId).contains(srcCalc)) calcDeps.get(calcId).add(srcCalc);
+                                            if (!calcDeps.get(calcId).contains(srcCalc)) {
+                                                calcDeps.get(calcId).add(srcCalc);
+                                            }
                                         }
                                     } else if ("FeatureChainExpression".equals(exprType)) {
                                         String baseCalcId = findChainBaseRef(expr);
                                         String chainMemberId = findChainMember(expr);
                                         String baseCalcName = baseCalcId != null ? calcIdToName.get(baseCalcId) : null;
                                         String chainName = chainMemberId != null ? calcOutputName.getOrDefault(chainMemberId, globalIdToName.get(chainMemberId)) : null;
-                                        calcInputDetails.get(calcId).add(new String[]{paramName, "CHAIN_REF", baseCalcId, baseCalcName, chainMemberId, chainName});
+                                        calcInputDetails.get(calcId).add(new String[]{paramName, "CHAIN_REF",
+                                            baseCalcId, baseCalcName, chainMemberId, chainName});
                                         if (baseCalcId != null && calcIdToName.containsKey(baseCalcId)) {
-                                            if (!calcDeps.get(calcId).contains(baseCalcId)) calcDeps.get(calcId).add(baseCalcId);
+                                            if (!calcDeps.get(calcId).contains(baseCalcId)) {
+                                                calcDeps.get(calcId).add(baseCalcId);
+                                            }
                                         }
                                     } else if ("InvocationExpression".equals(exprType)) {
                                         String funcName = findInvocationFunction(expr);
                                         List<String> argNames = findInvocationArgs(expr, globalIdToName);
-                                        calcInputDetails.get(calcId).add(new String[]{paramName, "INVOCATION", funcName, String.join(",", argNames)});
+                                        calcInputDetails.get(calcId).add(new String[]{paramName, "INVOCATION",
+                                            funcName, String.join(",", argNames)});
                                     }
                                 }
                             }
@@ -160,11 +192,15 @@ class CalcModel {
 
             // 打印 C1 结果
             for (String calcId : calcIds) {
-                System.out.println("[DEBUG] Calc '" + calcIdToName.get(calcId) + "' (" + calcIdToType.getOrDefault(calcId, "?") + "):");
-                System.out.println("  inputs: " + calcInputDetails.get(calcId).size() + ", deps: " + calcDeps.get(calcId).stream().map(d -> calcIdToName.get(d)).toList());
-                for (String[] detail : calcInputDetails.get(calcId)) {
-                    System.out.println("    " + detail[0] + " = " + detail[1] + "(" + (detail.length > 2 ? detail[2] : "") + ")");
-                }
+                System.out.println("[DEBUG] Calc '" + calcIdToName.get(calcId)
+                    + "' (" + calcIdToType.getOrDefault(calcId, "?") + "):");
+                System.out.println("  inputs: " + calcInputDetails.get(calcId).size()
+                    + ", deps: " + calcDeps.get(calcId).stream()
+                        .map(d -> calcIdToName.get(d)).toList());
+                    for (String[] detail : calcInputDetails.get(calcId)) {
+                        System.out.println("    " + detail[0] + " = " + detail[1]
+                            + "(" + (detail.length > 2 ? detail[2] : "") + ")");
+                    }
             }
 
             // --- PASS C2: 依赖图构建 + 拓扑排序 ---
@@ -178,7 +214,10 @@ class CalcModel {
                 for (String cid : new ArrayList<>(remaining)) {
                     boolean allDepsResolved = true;
                     for (String dep : calcDeps.get(cid)) {
-                        if (!resolved.contains(dep)) { allDepsResolved = false; break; }
+                        if (!resolved.contains(dep)) {
+                            allDepsResolved = false;
+                            break;
+                        }
                     }
                     if (allDepsResolved) {
                         sorted.add(cid);
@@ -187,19 +226,20 @@ class CalcModel {
                         progress = true;
                     }
                 }
-                if (!progress) {
-                    // 环检测: 把剩余的按原顺序加入
-                    for (String cid : calcIds) {
-                        if (remaining.contains(cid)) {
-                            sorted.add(cid);
-                            remaining.remove(cid);
+                    if (!progress) {
+                        // 环检测: 把剩余的按原顺序加入
+                        for (String cid : calcIds) {
+                            if (remaining.contains(cid)) {
+                                sorted.add(cid);
+                                remaining.remove(cid);
+                            }
                         }
+                        System.out.println("[WARN] 依赖环检测, 按原序追加剩余 calc");
                     }
-                    System.out.println("[WARN] 依赖环检测, 按原序追加剩余 calc");
-                }
             }
             List<String> topoOrder = sorted;
-            System.out.println("[DEBUG] 拓扑序: " + topoOrder.stream().map(id -> calcIdToName.get(id)).toList());
+            System.out.println("[DEBUG] 拓扑序: " + topoOrder.stream()
+                .map(id -> calcIdToName.get(id)).toList());
 
             // --- PASS C3: UML 节点和边创建 ---
             System.out.println("\n[DEBUG] === PASS C3: UML 节点/边创建 ===");
@@ -209,11 +249,13 @@ class CalcModel {
                 String name = calcIdToName.get(calcId);
                 String typeName = calcIdToType.getOrDefault(calcId, "");
                 String bodyText = typeName + "(" + calcId + ")";
-                CallBehaviorAction action = UmlHelper.createCallBehaviorActionWithBody(activity, name, bodyText, "SysML");
+                CallBehaviorAction action = UmlHelper.createCallBehaviorActionWithBody(
+                    activity, name, bodyText, "SysML");
                 MainRunner.umlNodes.put(calcId, action);
                 calcActions.put(calcId, action);
                 MainRunner.nameToIdMap.put(name, calcId);
-                System.out.println("[DEBUG] Created CallBehaviorAction: " + name + " [" + typeName + "]");
+                System.out.println("[DEBUG] Created CallBehaviorAction: " + name
+                    + " [" + typeName + "]");
             }
 
             // 创建依赖边 (ObjectFlow)
@@ -230,20 +272,26 @@ class CalcModel {
                         // 添加 guard 标注数据依赖信息
                         String depOutputName = "";
                         for (Map.Entry<String, String> e : calcOutputToCalcId.entrySet()) {
-                            if (depId.equals(e.getValue())) { depOutputName = calcOutputName.getOrDefault(e.getKey(), ""); break; }
+                            if (depId.equals(e.getValue())) {
+                                depOutputName = calcOutputName.getOrDefault(e.getKey(), "");
+                                break;
+                            }
                         }
                         OpaqueExpression guardExpr = ctx.factory.createOpaqueExpression();
                         guardExpr.getBodies().add(depOutputName);
                         flow.setGuard(guardExpr);
                         edgeCount++;
-                        System.out.println("[DEBUG] ObjectFlow: " + calcIdToName.get(depId) + "." + depOutputName + " → " + calcIdToName.get(calcId));
+                        System.out.println("[DEBUG] ObjectFlow: " + calcIdToName.get(depId)
+                            + "." + depOutputName + " → " + calcIdToName.get(calcId));
                     }
                 }
             }
 
             // 添加 Start/End 节点
-            InitialNode startNode = (InitialNode) activity.createOwnedNode("Start", UMLPackage.Literals.INITIAL_NODE);
-            ActivityFinalNode endNode = (ActivityFinalNode) activity.createOwnedNode("End", UMLPackage.Literals.ACTIVITY_FINAL_NODE);
+            InitialNode startNode = (InitialNode) activity.createOwnedNode(
+                "Start", UMLPackage.Literals.INITIAL_NODE);
+            ActivityFinalNode endNode = (ActivityFinalNode) activity.createOwnedNode(
+                "End", UMLPackage.Literals.ACTIVITY_FINAL_NODE);
             MainRunner.umlNodes.put("START_NODE", startNode);
             MainRunner.umlNodes.put("END_NODE", endNode);
 
@@ -264,10 +312,12 @@ class CalcModel {
                 edgeCount++;
             }
 
-            System.out.println("[DEBUG] PASS C3 完成: " + calcActions.size() + " 个节点, " + edgeCount + " 条边");
+            System.out.println("[DEBUG] PASS C3 完成: " + calcActions.size()
+                + " 个节点, " + edgeCount + " 条边");
 
         } catch (Exception e) {
-            System.out.println("[ERROR] Calc branch failed: " + e.getClass().getName() + ": " + e.getMessage());
+            System.out.println("[ERROR] Calc branch failed: "
+                + e.getClass().getName() + ": " + e.getMessage());
             e.printStackTrace();
         }
     }
@@ -282,7 +332,9 @@ class CalcModel {
                     if ("type".equals(f.getName())) {
                         try {
                             Object v = child.eGet(f);
-                            if (v == null) continue;
+                            if (v == null) {
+                                continue;
+                            }
 
                             // 优先尝试解析 EMF 代理
                             if (v instanceof EObject) {
@@ -290,7 +342,9 @@ class CalcModel {
                                 if (resolved != null && !resolved.eIsProxy()) {
                                     if (resolved instanceof org.omg.sysml.lang.sysml.Element) {
                                         String dn = ((org.omg.sysml.lang.sysml.Element) resolved).getDeclaredName();
-                                        if (dn != null && !dn.isEmpty()) return dn;
+                        if (dn != null && !dn.isEmpty()) {
+                            return dn;
+                        }
                                     }
                                 }
                             }
@@ -298,15 +352,20 @@ class CalcModel {
                             // 回退: 从 href 提取最后一段作为 type name
                             String href = v.toString();
                             int hashIdx = href.indexOf('#');
-                            if (hashIdx > 0) href = href.substring(0, hashIdx);
+                            if (hashIdx > 0) {
+                                href = href.substring(0, hashIdx);
+                            }
                             int lastSlash = href.lastIndexOf('/');
-                            if (lastSlash >= 0) href = href.substring(lastSlash + 1);
+                            if (lastSlash >= 0) {
+                                href = href.substring(lastSlash + 1);
+                            }
                             // 去除文件扩展名
                             if (href.endsWith(".kermlx") || href.endsWith(".sysmlx")) {
                                 href = href.substring(0, href.lastIndexOf('.'));
                             }
                             return href;
-                        } catch (Exception ignored) {}
+                        } catch (Exception ignored) {
+                        }
                     }
                 }
             }
@@ -320,9 +379,14 @@ class CalcModel {
             if (featureName.equals(f.getName())) {
                 try {
                     Object val = obj.eGet(f);
-                    if (val instanceof String) return (String) val;
-                    if (val != null) return val.toString();
-                } catch (Exception ignored) {}
+                    if (val instanceof String) {
+                        return (String) val;
+                    }
+                    if (val != null) {
+                        return val.toString();
+                    }
+                } catch (Exception ignored) {
+                }
             }
         }
         return "";
@@ -334,14 +398,20 @@ class CalcModel {
     static String getMemberElementId(EObject expr) {
         // 1) 先尝试直接从对象自身获取 memberElement
         String directResult = extractMemberElement(expr);
-        if (directResult != null) return directResult;
+        if (directResult != null) {
+            return directResult;
+        }
 
         // 2) 如果对象自身没有 memberElement，搜索子 Membership
         for (EObject child : expr.eContents()) {
             String cn = child.eClass().getName();
-            if ("Membership".equals(cn) && !"ReturnParameterMembership".equals(cn) && !"ParameterMembership".equals(cn)) {
+            if ("Membership".equals(cn)
+                && !"ReturnParameterMembership".equals(cn)
+                && !"ParameterMembership".equals(cn)) {
                 String result = extractMemberElement(child);
-                if (result != null) return result;
+                if (result != null) {
+                    return result;
+                }
             }
         }
         return null;
@@ -358,22 +428,33 @@ class CalcModel {
                         // 代理解析
                         if (eObj.eIsProxy()) {
                             EObject resolved = EcoreUtil.resolve(eObj, obj);
-                            if (resolved != null && !resolved.eIsProxy()) eObj = resolved;
+                            if (resolved != null && !resolved.eIsProxy()) {
+                                eObj = resolved;
+                            }
                         }
                         if (eObj instanceof org.omg.sysml.lang.sysml.Element) {
                             String eid = ((org.omg.sysml.lang.sysml.Element) eObj).getElementId();
-                            if (eid != null) return eid;
+                            if (eid != null) {
+                                return eid;
+                            }
                         }
                         // 回退: 代理 URI fragment
                         if (eObj.eIsProxy()) {
                             try {
                                 URI uri = ((org.eclipse.emf.ecore.InternalEObject) eObj).eProxyURI();
-                                if (uri != null && uri.fragment() != null) return uri.fragment();
-                            } catch (Exception ignored) {}
+                                if (uri != null && uri.fragment() != null) {
+                                    return uri.fragment();
+                                }
+                            } catch (Exception ignored) {
+                            }
+                            }
                         }
                     }
-                    if (val != null && !(val instanceof EObject)) return val.toString();
-                } catch (Exception ignored) {}
+                    if (val != null && !(val instanceof EObject)) {
+                        return val.toString();
+                    }
+                } catch (Exception ignored) {
+                }
             }
         }
         return null;
@@ -423,15 +504,25 @@ class CalcModel {
                             // 尝试 eGet
                             for (EStructuralFeature f : se.eClass().getEAllStructuralFeatures()) {
                                 if ("href".equals(f.getName())) {
-                                    try { Object v = se.eGet(f); if (v != null) href = v.toString(); } catch (Exception ignored) {}
+                                    try {
+                                        Object v = se.eGet(f);
+                                        if (v != null) {
+                                            href = v.toString();
+                                        }
+                                    } catch (Exception ignored) {
+                                    }
                                 }
                             }
                         }
                         if (!href.isEmpty()) {
                             int hashIdx = href.indexOf('#');
-                            if (hashIdx > 0) href = href.substring(0, hashIdx);
+                            if (hashIdx > 0) {
+                                href = href.substring(0, hashIdx);
+                            }
                             int lastSlash = href.lastIndexOf('/');
-                            if (lastSlash >= 0) href = href.substring(lastSlash + 1);
+                            if (lastSlash >= 0) {
+                                href = href.substring(lastSlash + 1);
+                            }
                             return href;
                         }
                     }
@@ -446,11 +537,13 @@ class CalcModel {
         List<String> args = new ArrayList<>();
         for (EObject child : invExpr.eContents()) {
             if ("ParameterMembership".equals(child.eClass().getName())) {
-                String vis = getFeatureValue(child, "visibility");
-                if ("private".equals(vis) || vis.isEmpty()) {
+                String dir = getFeatureValue(child, "visibility");
+                if ("private".equals(dir) || dir.isEmpty()) {
                     // 递归搜索 FeatureReferenceExpression
                     String argName = findNestedRefName(child, idToName);
-                    if (argName != null) args.add(argName);
+                    if (argName != null) {
+                        args.add(argName);
+                    }
                 }
             }
         }
@@ -465,7 +558,9 @@ class CalcModel {
         }
         for (EObject child : root.eContents()) {
             String result = findNestedRefName(child, idToName);
-            if (result != null) return result;
+            if (result != null) {
+                return result;
+            }
         }
         return null;
     }
@@ -504,7 +599,9 @@ class CalcModel {
             if ("type".equals(f.getName())) {
                 try {
                     Object v = featureTyping.eGet(f);
-                    if (v == null) continue;
+                    if (v == null) {
+                        continue;
+                    }
 
                     if (v instanceof EObject) {
                         EObject eObj = (EObject) v;
@@ -514,7 +611,9 @@ class CalcModel {
                         if (resolved != null && !resolved.eIsProxy()) {
                             if (resolved instanceof org.omg.sysml.lang.sysml.Element) {
                                 String dn = ((org.omg.sysml.lang.sysml.Element) resolved).getDeclaredName();
-                                if (dn != null && !dn.isEmpty()) return dn;
+                                if (dn != null && !dn.isEmpty()) {
+                                    return dn;
+                                }
                             }
                         }
 
@@ -523,18 +622,26 @@ class CalcModel {
                         if (eObj.eIsProxy()) {
                             try {
                                 URI uri = ((org.eclipse.emf.ecore.InternalEObject) eObj).eProxyURI();
-                                if (uri != null) proxyUriStr = uri.toString();
-                            } catch (Exception ignored) {}
+                                if (uri != null) {
+                                    proxyUriStr = uri.toString();
+                                }
+                            } catch (Exception ignored) {
+                            }
                         }
-                        if (proxyUriStr == null) proxyUriStr = eObj.toString();
+                        if (proxyUriStr == null) {
+                            proxyUriStr = eObj.toString();
+                        }
 
                         String sysmlPath = resolveSysmlFilePath(proxyUriStr, sysmlBasePath);
                         if (sysmlPath != null && calcDeclaredName != null) {
                             String typeName = extractCalcTypeFromSysml(sysmlPath, calcDeclaredName);
-                            if (!typeName.isEmpty()) return typeName;
+                            if (!typeName.isEmpty()) {
+                                return typeName;
+                            }
                         }
                     }
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                }
             }
         }
         return "";
@@ -550,13 +657,18 @@ class CalcModel {
         // 去掉 fragment
         String fileRef = proxyUri;
         int hashIdx = fileRef.indexOf('#');
-        if (hashIdx >= 0) fileRef = fileRef.substring(0, hashIdx);
+        if (hashIdx >= 0) {
+            fileRef = fileRef.substring(0, hashIdx);
+        }
 
         // 处理 file: URI scheme
         if (fileRef.startsWith("file:/")) {
             fileRef = fileRef.substring(6); // 去掉 "file:/"
             // URL decode (处理 %20 等编码字符)
-            try { fileRef = java.net.URLDecoder.decode(fileRef, "UTF-8"); } catch (Exception ignored) {}
+            try {
+                fileRef = java.net.URLDecoder.decode(fileRef, "UTF-8");
+            } catch (Exception ignored) {
+            }
             // Windows: "D:/path/..." → 直接使用
             // Unix: "/path/..." → 直接使用 (前面被去掉了一个 /)
             if (!fileRef.startsWith("/") && !fileRef.matches("^[A-Za-z]:.*")) {
@@ -566,12 +678,18 @@ class CalcModel {
         }
         if (fileRef.startsWith("file:")) {
             fileRef = fileRef.substring(5);
-            try { fileRef = java.net.URLDecoder.decode(fileRef, "UTF-8"); } catch (Exception ignored) {}
+            try {
+                fileRef = java.net.URLDecoder.decode(fileRef, "UTF-8");
+            } catch (Exception ignored) {
+            }
             return fileRef;
         }
 
         // URL decode (处理 %20 等)
-        try { fileRef = java.net.URLDecoder.decode(fileRef, "UTF-8"); } catch (Exception ignored) {}
+        try {
+            fileRef = java.net.URLDecoder.decode(fileRef, "UTF-8");
+        } catch (Exception ignored) {
+        }
 
         // 如果包含路径分隔符，直接使用
         if (fileRef.contains("/") || fileRef.contains("\\")) {
@@ -643,7 +761,8 @@ class CalcModel {
                             }
                         }
                     }
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                }
             }
 
             // Feature/ReferenceUsage with declaredName: 链路径节点

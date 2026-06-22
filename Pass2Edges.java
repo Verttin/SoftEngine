@@ -44,27 +44,49 @@ class Pass2Edges {
                     }
                 }
             }
-            if (actionDefObj == null) continue;
+            if (actionDefObj == null) {
+                continue;
+            }
             // 扫描 ActionDefinition 的 FeatureMembership 子节点
             for (EObject fm : actionDefObj.eContents()) {
-                if (!fm.eClass().getName().equals("FeatureMembership")) continue;
+                if (!fm.eClass().getName().equals("FeatureMembership")) {
+                    continue;
+                }
                 for (EObject inner : fm.eContents()) {
                     String ic = inner.eClass().getName();
-                    if (ic.equals("SuccessionAsUsage")) continue;
+                    if (ic.equals("SuccessionAsUsage")) {
+                        continue;
+                    }
                     if (ic.equals("WhileLoopActionUsage")) {
                         String whileId = ((org.omg.sysml.lang.sysml.Element) inner).getElementId();
                         String mergeId = MainRunner.whileLoopMergeIds.get(whileId);
-                        if (mergeId != null) ctx.sequentialActionIds.add(mergeId);
+                        if (mergeId != null) {
+                            ctx.sequentialActionIds.add(mergeId);
+                        }
                         continue;
                     }
                     String innerId = null;
-                    try { innerId = ((org.omg.sysml.lang.sysml.Element) inner).getElementId(); } catch (Exception ignored) {}
-                    if (innerId == null) continue;
+                    try {
+                        innerId = ((org.omg.sysml.lang.sysml.Element) inner).getElementId();
+                    } catch (Exception ignored) {
+                        // ignored
+                    }
+                    if (innerId == null) {
+                        continue;
+                    }
                     // 跳过已按名称处理过的节点 (flat 模型)
                     String innerName = null;
-                    try { innerName = ((org.omg.sysml.lang.sysml.Element) inner).getDeclaredName(); } catch (Exception ignored) {}
-                    if (innerName != null && !innerName.isEmpty()) continue;
-                    if (MainRunner.umlNodes.containsKey(innerId)) continue;
+                    try {
+                        innerName = ((org.omg.sysml.lang.sysml.Element) inner).getDeclaredName();
+                    } catch (Exception ignored) {
+                        // ignored
+                    }
+                    if (innerName != null && !innerName.isEmpty()) {
+                        continue;
+                    }
+                    if (MainRunner.umlNodes.containsKey(innerId)) {
+                        continue;
+                    }
                     // 提取表达式 (仅针对 AssignmentActionUsage)
                     if (ic.equals("AssignmentActionUsage") || ic.equals("ActionUsage")) {
                         String expr = ExpressionUtils.extractAssignmentText(inner);
@@ -158,7 +180,9 @@ class Pass2Edges {
                 Matcher mPlain = Pattern.compile("then\\s+(\\w+)\\b[^;]*;", Pattern.MULTILINE).matcher(text);
                 while (mPlain.find()) {
                     String target = mPlain.group(1);
-                    if ("merge".equals(target) || "action".equals(target) || "decide".equals(target)) continue;
+                    if ("merge".equals(target) || "action".equals(target) || "decide".equals(target)) {
+                        continue;
+                    }
                     // 检查是否与 merge/action/decide 匹配重叠
                     boolean overlap = false;
                     for (int[] mp : matchPositions) {
@@ -319,12 +343,20 @@ class Pass2Edges {
                     int order = 0;
 
                     for (EObject fm : mainActionDef.eContents()) {
-                        if (!fm.eClass().getName().equals("FeatureMembership")) continue;
+                        if (!fm.eClass().getName().equals("FeatureMembership")) {
+                            continue;
+                        }
                         for (EObject inner : fm.eContents()) {
                             String ic = inner.eClass().getName();
                             String iId = null;
-                            try { iId = ((org.omg.sysml.lang.sysml.Element) inner).getElementId(); } catch (Exception ignored) {}
-                            if (iId == null) continue;
+                            try {
+                                iId = ((org.omg.sysml.lang.sysml.Element) inner).getElementId();
+                            } catch (Exception ignored) {
+                                // ignored
+                            }
+                            if (iId == null) {
+                                continue;
+                            }
 
                             if (ic.contains("ActionUsage") || ic.equals("MergeNode") || ic.equals("DecisionNode")) {
                                 elementIds.add(iId);
@@ -349,7 +381,9 @@ class Pass2Edges {
                                                                     targetId = ((org.omg.sysml.lang.sysml.Element) rfVal).getElementId();
                                                                 }
                                                             }
-                                                        } catch (Exception ignored) {}
+                                                        } catch (Exception ignored) {
+                                                            // ignored
+                                                        }
                                                         // 检查是否为 Done (外部库引用)
                                                         for (EObject rsChild : rs.eContents()) {
                                                             if (rsChild.eClass().getName().equals("ReferenceSubsetting")) {
@@ -361,7 +395,9 @@ class Pass2Edges {
                                                                             isDone = true;
                                                                         }
                                                                     }
-                                                                } catch (Exception ignored) {}
+                                                                } catch (Exception ignored) {
+                                                                    // ignored
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -395,13 +431,17 @@ class Pass2Edges {
                                                     srcId = ((org.omg.sysml.lang.sysml.Element) meVal).getElementId();
                                                 }
                                             }
-                                        } catch (Exception ignored) {}
+                                        } catch (Exception ignored) {
+                                            // ignored
+                                        }
                                     }
                                     if (ccn.equals("TransitionFeatureMembership")) {
                                         for (EObject expr : child.eContents()) {
                                             if (expr.eClass().getName().contains("OperatorExpression")) {
                                                 String g = ExpressionUtils.buildExpressionText(expr);
-                                                if (g != null && !g.isEmpty() && ExpressionUtils.isValidExpression(g)) guardText = g;
+                                                if (g != null && !g.isEmpty() && ExpressionUtils.isValidExpression(g)) {
+                                                    guardText = g;
+                                                }
                                             }
                                         }
                                     }
@@ -422,7 +462,9 @@ class Pass2Edges {
                                                                                     tgtId = ((org.omg.sysml.lang.sysml.Element) rfVal).getElementId();
                                                                                 }
                                                                             }
-                                                                        } catch (Exception ignored) {}
+                                                                        } catch (Exception ignored) {
+                                                                            // ignored
+                                                                        }
                                                                     }
                                                                 }
                                                             }
@@ -485,7 +527,9 @@ class Pass2Edges {
                         // 如果下一个元素是 DecisionNode, 不创建顺序边 (PASS 3-ext 隐式接续会处理)
                         if ("DecisionNode".equals(elementType.get(tgtId))) continue;
                         // 不创建两个 TransitionUsage 目标之间的顺序边 (防止并行分支间的错误边)
-                        if (transitionTargets.contains(srcId) && transitionTargets.contains(tgtId)) continue;
+                        if (transitionTargets.contains(srcId) && transitionTargets.contains(tgtId)) {
+                            continue;
+                        }
                         // 如果目标节点是某个 TransitionUsage 的分支目标, 不创建顺序边
                         // (防止 reorder 后前驱节点直接连到分支目标, 产生多余出度 → 多余 ForkNode)
                         if (transitionTargets.contains(tgtId)) continue;
@@ -537,7 +581,9 @@ class Pass2Edges {
                             }
                             guardIdx++;
                         }
-                    } catch (Exception ignored) {}
+                    } catch (Exception ignored) {
+                        // ignored
+                    }
 
                     for (String[] te : transitionEdges) {
                         MainRunner.logicalEdges.add(new MainRunner.EdgeData(te[0], te[1], te[2]));
@@ -576,7 +622,9 @@ class Pass2Edges {
                             int maxTargetOrder = -1;
                             for (String t : dnTargets) {
                                 int o = elementOrder.getOrDefault(t, -1);
-                                if (o > maxTargetOrder) maxTargetOrder = o;
+                                if (o > maxTargetOrder) {
+                                    maxTargetOrder = o;
+                                }
                             }
                             for (String eid : elementIds) {
                                 if (elementOrder.getOrDefault(eid, -1) == maxTargetOrder + 1) {
@@ -585,7 +633,9 @@ class Pass2Edges {
                                 }
                             }
                         }
-                        if (nextId == null) continue;
+                        if (nextId == null) {
+                            continue;
+                        }
 
                         // 如果 nextId 已经是此 DecisionNode 的 transition target, 无需 MergeNode
                         if (dnTargets.contains(nextId)) continue;
@@ -881,12 +931,20 @@ class Pass2Edges {
                     List<String[]> successionInfo2f = new ArrayList<>();
 
                     for (EObject fm : mainActionDef2f.eContents()) {
-                        if (!fm.eClass().getName().equals("FeatureMembership")) continue;
+                        if (!fm.eClass().getName().equals("FeatureMembership")) {
+                            continue;
+                        }
                         for (EObject inner : fm.eContents()) {
                             String ic = inner.eClass().getName();
                             String iId = null;
-                            try { iId = ((org.omg.sysml.lang.sysml.Element) inner).getElementId(); } catch (Exception ignored) {}
-                            if (iId == null) continue;
+                            try {
+                                iId = ((org.omg.sysml.lang.sysml.Element) inner).getElementId();
+                            } catch (Exception ignored) {
+                                // ignored
+                            }
+                            if (iId == null) {
+                                continue;
+                            }
 
                             if (ic.contains("ActionUsage") || ic.equals("ForkNode") || ic.equals("JoinNode") || ic.equals("MergeNode")) {
                                 fm2fIds.add(iId);
@@ -919,7 +977,9 @@ class Pass2Edges {
                                                                         isDone = true;
                                                                     }
                                                                 }
-                                                            } catch (Exception ignored) {}
+                                                            } catch (Exception ignored) {
+                                                                // ignored
+                                                            }
                                                             // 嵌套 ReferenceSubsetting (也可能指向 done)
                                                             for (EObject rsChild : rs.eContents()) {
                                                                 if (rsChild.eClass().getName().equals("ReferenceSubsetting")) {
@@ -931,7 +991,9 @@ class Pass2Edges {
                                                                                 isDone = true;
                                                                             }
                                                                         }
-                                                                    } catch (Exception ignored) {}
+                                                                    } catch (Exception ignored) {
+                                                                        // ignored
+                                                                    }
                                                                 }
                                                             }
                                                         }
@@ -952,15 +1014,23 @@ class Pass2Edges {
                                     for (EObject fm2 : mainActionDef2f.eContents()) {
                                         if (!fm2.eClass().getName().equals("FeatureMembership")) continue;
                                         if (fm2 == fm) { foundSelf = true; continue; }
-                                        if (!foundSelf) continue;
+                                        if (!foundSelf) {
+                                            continue;
+                                        }
                                         for (EObject inner2 : fm2.eContents()) {
                                             String ic2 = inner2.eClass().getName();
                                             if (ic2.contains("ActionUsage") || ic2.equals("ForkNode") || ic2.equals("JoinNode") || ic2.equals("MergeNode")) {
-                                                try { targetId = ((org.omg.sysml.lang.sysml.Element) inner2).getElementId(); } catch (Exception ignored) {}
+                                                try {
+                                                    targetId = ((org.omg.sysml.lang.sysml.Element) inner2).getElementId();
+                                                } catch (Exception ignored) {
+                                                    // ignored
+                                                }
                                                 break;
                                             }
                                         }
-                                        if (targetId != null) break;
+                                        if (targetId != null) {
+                                            break;
+                                        }
                                     }
                                 }
                                 successionInfo2f.add(new String[]{null, targetId, iId});  // [source=null, target, sauId]
@@ -975,11 +1045,17 @@ class Pass2Edges {
                     String currentNodeId = null;
                     int sauIdx = 0;
                     for (EObject fm : mainActionDef2f.eContents()) {
-                        if (!fm.eClass().getName().equals("FeatureMembership")) continue;
+                        if (!fm.eClass().getName().equals("FeatureMembership")) {
+                            continue;
+                        }
                         for (EObject inner : fm.eContents()) {
                             String ic = inner.eClass().getName();
                             if (ic.contains("ActionUsage") || ic.equals("ForkNode") || ic.equals("JoinNode") || ic.equals("MergeNode")) {
-                                try { currentNodeId = ((org.omg.sysml.lang.sysml.Element) inner).getElementId(); } catch (Exception ignored) {}
+                                try {
+                                    currentNodeId = ((org.omg.sysml.lang.sysml.Element) inner).getElementId();
+                                } catch (Exception ignored) {
+                                    // ignored
+                                }
                             } else if (ic.equals("SuccessionAsUsage")) {
                                 if (sauIdx < successionInfo2f.size()) {
                                     successionInfo2f.get(sauIdx)[0] = currentNodeId;

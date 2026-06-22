@@ -44,7 +44,9 @@ class Pass3Edges {
                 while (m2.find()) {
                     guardMap.computeIfAbsent(m2.group(1), k -> new HashMap<>()).put(m2.group(2), m2.group(3).trim());
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+                // ignored
+            }
         }
 
         // ===================================================================
@@ -90,7 +92,11 @@ class Pass3Edges {
                                                             }
                                                         }
                                                     }
-                                                } catch (Exception ignored) {}
+                                                } catch (Exception ignored) {
+                                                    // ignored
+                                                }
+                                                    // ignored
+                                                }
                                             }
                                         }
                                     }
@@ -229,7 +235,9 @@ class Pass3Edges {
                             break;
                         }
                     }
-                    if (!hasImplicitSucc) continue;
+                    if (!hasImplicitSucc) {
+                        continue;
+                    }
 
                     // Resolve implicit positional references
                     for (int fi = 0; fi < fmChildren.size(); fi++) {
@@ -245,7 +253,13 @@ class Pass3Edges {
                                 for (EObject ref : efm.eContents()) {
                                     if (ref.eClass().getName().contains("ReferenceUsage")) {
                                         String refName = null;
-                                        try { refName = ((org.omg.sysml.lang.sysml.Element) ref).getDeclaredName(); } catch (Exception ignored) {}
+                                        try {
+                                            refName = ((org.omg.sysml.lang.sysml.Element) ref).getDeclaredName();
+                                        } catch (Exception ignored) {
+                                            // ignored
+                                        }
+                                            // ignored
+                                        }
                                         if (refName != null && !refName.isEmpty()) {
                                             if (endCount == 0) hasNamedSrc = true;
                                             else hasNamedTgt = true;
@@ -279,7 +293,13 @@ class Pass3Edges {
                                 break;
                             }
                             if (prevElem != null) {
-                                try { prevId = ((org.omg.sysml.lang.sysml.Element) prevElem).getElementId(); } catch (Exception ignored) {}
+                                try {
+                                    prevId = ((org.omg.sysml.lang.sysml.Element) prevElem).getElementId();
+                                } catch (Exception ignored) {
+                                    // ignored
+                                }
+                                    // ignored
+                                }
                             }
                             // Map WhileLoop/Loop IDs to their exit nodes
                             if (prevId != null) {
@@ -298,7 +318,13 @@ class Pass3Edges {
                                         String candCn = cand.eClass().getName();
                                         if (candCn.contains("FlowUsage") || candCn.contains("FlowConnectionUsage")
                                             || candCn.contains("ConnectionUsage") || candCn.contains("InterfaceUsage")) continue;
-                                        try { tgtId = ((org.omg.sysml.lang.sysml.Element) cand).getElementId(); } catch (Exception ignored) {}
+                                        try {
+                                            tgtId = ((org.omg.sysml.lang.sysml.Element) cand).getElementId();
+                                        } catch (Exception ignored) {
+                                            // ignored
+                                        }
+                                            // ignored
+                                        }
                                         break;
                                     }
                                     if (tgtId != null && MainRunner.umlNodes.containsKey(tgtId)) {
@@ -332,7 +358,11 @@ class Pass3Edges {
                                                                     isDone = true;
                                                                 }
                                                             }
-                                                        } catch (Exception ignored) {}
+                                                        } catch (Exception ignored) {
+                                                            // ignored
+                                                        }
+                                                            // ignored
+                                                        }
                                                     }
                                                 }
                                             }
@@ -361,7 +391,11 @@ class Pass3Edges {
                                                                 isDoneTarget = true;
                                                             }
                                                         }
-                                                    } catch (Exception ignored) {}
+                                                    } catch (Exception ignored) {
+                                                        // ignored
+                                                    }
+                                                        // ignored
+                                                    }
                                                 }
                                             }
                                         }
@@ -372,7 +406,13 @@ class Pass3Edges {
                             if (isDoneTarget) {
                                 EObject prevElem = fmChildren.get(fi - 1);
                                 String prevId = null;
-                                try { prevId = ((org.omg.sysml.lang.sysml.Element) prevElem).getElementId(); } catch (Exception ignored) {}
+                                try {
+                                    prevId = ((org.omg.sysml.lang.sysml.Element) prevElem).getElementId();
+                                } catch (Exception ignored) {
+                                    // ignored
+                                }
+                                    // ignored
+                                }
                                 if (prevId != null && MainRunner.umlNodes.containsKey(prevId)) {
                                     MainRunner.logicalEdges.add(new MainRunner.EdgeData(prevId, "END_NODE"));
                                     System.out.println("[DEBUG] PASS 3-ext: implicit succession to done: " +
@@ -413,7 +453,11 @@ class Pass3Edges {
                 if (obj2.eClass().getName().equals("DecisionNode")) {
                     try {
                         decisionNodeIds2c.add(((org.omg.sysml.lang.sysml.Element) obj2).getElementId());
-                    } catch (Exception ignored) {}
+                    } catch (Exception ignored) {
+                        // ignored
+                    }
+                        // ignored
+                    }
                 }
             }
 

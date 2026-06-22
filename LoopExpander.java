@@ -66,7 +66,10 @@ public class LoopExpander {
                     boolean isThenBranch = false;
                     if (thenBranchIds != null) {
                         for (String tid : thenBranchIds) {
-                            if (nextId.equals(tid)) { isThenBranch = true; break; }
+                        if (nextId.equals(tid)) {
+                            isThenBranch = true;
+                            break;
+                        }
                         }
                     }
                     if (!isThenBranch) break;
@@ -256,7 +259,9 @@ public class LoopExpander {
                     EObject d = it.next();
                     if (d instanceof org.omg.sysml.lang.sysml.Element) {
                         String dId = ((org.omg.sysml.lang.sysml.Element) d).getElementId();
-                        if (dId != null) MainRunner.loopBodyNodeIds.add(dId);
+                        if (dId != null) {
+                            MainRunner.loopBodyNodeIds.add(dId);
+                        }
                     }
                 }
             } else if (baClass.equals("ForLoopActionUsage")) {
@@ -267,7 +272,9 @@ public class LoopExpander {
                     EObject d = it.next();
                     if (d instanceof org.omg.sysml.lang.sysml.Element) {
                         String dId = ((org.omg.sysml.lang.sysml.Element) d).getElementId();
-                        if (dId != null) MainRunner.loopBodyNodeIds.add(dId);
+                        if (dId != null) {
+                            MainRunner.loopBodyNodeIds.add(dId);
+                        }
                     }
                 }
             } else if (baClass.equals("LoopActionUsage")) {
@@ -278,7 +285,9 @@ public class LoopExpander {
                     EObject d = it.next();
                     if (d instanceof org.omg.sysml.lang.sysml.Element) {
                         String dId = ((org.omg.sysml.lang.sysml.Element) d).getElementId();
-                        if (dId != null) MainRunner.loopBodyNodeIds.add(dId);
+                        if (dId != null) {
+                            MainRunner.loopBodyNodeIds.add(dId);
+                        }
                     }
                 }
             } else if (baClass.equals("IfActionUsage")) {
@@ -307,8 +316,9 @@ public class LoopExpander {
                         String ic2 = ifChild.eClass().getName();
                         String in = ((org.omg.sysml.lang.sysml.Element) ifChild).getDeclaredName();
                         String iid = ((org.omg.sysml.lang.sysml.Element) ifChild).getElementId();
-                        if (in != null && !in.isEmpty() && ic2.contains("ActionUsage") && !ic2.equals("IfActionUsage"))
+                        if (in != null && !in.isEmpty() && ic2.contains("ActionUsage") && !ic2.equals("IfActionUsage")) {
                             tBranchIds.add(iid);
+                        }
                     }
                 }
                 ifThenBranchIds.put(baId, tBranchIds);
@@ -326,7 +336,10 @@ public class LoopExpander {
                     bodyNode = UmlHelper.createCallBehaviorActionWithBody(activity, nodeName, bodyText, "SysMLv2");
                 }
                 MainRunner.umlNodes.put(baId, bodyNode);
-                if (baName != null) { MainRunner.uuidToNameMap.put(baId, baName); MainRunner.nameToIdMap.put(baName, baId); }
+                if (baName != null) {
+                    MainRunner.uuidToNameMap.put(baId, baName);
+                    MainRunner.nameToIdMap.put(baName, baId);
+                }
                 bodyNodeIds.add(baId);
                 MainRunner.loopBodyNodeIds.add(baId);
             }
@@ -364,21 +377,26 @@ public class LoopExpander {
             // until: Merge → body → untilDecision → (cond: exit, else: Merge)
             if (!bodyNodeIds.isEmpty()) {
                 ControlFlow m2b = UMLFactory.eINSTANCE.createControlFlow();
-                m2b.setSource(merge); m2b.setTarget(MainRunner.umlNodes.get(bodyNodeIds.get(0)));
+                m2b.setSource(merge);
+                m2b.setTarget(MainRunner.umlNodes.get(bodyNodeIds.get(0)));
                 activity.getEdges().add(m2b);
                 buildBodyInternalFlows(activity, bodyNodeIds, ifDecIds, ifMrgIds, ifCondTexts, ifThenBranchIds, MainRunner.umlNodes, merge, decision);
                 String lastId = bodyNodeIds.get(bodyNodeIds.size() - 1);
                 boolean lastIsIf = ifDecIds.containsValue(lastId);
                 if (!lastIsIf) {
                     ControlFlow toD = UMLFactory.eINSTANCE.createControlFlow();
-                    toD.setSource(MainRunner.umlNodes.get(lastId)); toD.setTarget(decision);
+                    toD.setSource(MainRunner.umlNodes.get(lastId));
+                    toD.setTarget(decision);
                     activity.getEdges().add(toD);
                 }
             }
             ControlFlow back = UMLFactory.eINSTANCE.createControlFlow();
-            back.setSource(decision); back.setTarget(merge);
-            OpaqueExpression bg = UMLFactory.eINSTANCE.createOpaqueExpression(); bg.getBodies().add("else");
-            back.setGuard(bg); activity.getEdges().add(back);
+            back.setSource(decision);
+            back.setTarget(merge);
+            OpaqueExpression bg = UMLFactory.eINSTANCE.createOpaqueExpression();
+            bg.getBodies().add("else");
+            back.setGuard(bg);
+            activity.getEdges().add(back);
             exitMergeId = decId; // until: DecisionNode 是出口
         } else if (hasWhile && hasUntil) {
             // while+until dual condition
@@ -388,13 +406,18 @@ public class LoopExpander {
             MainRunner.whileLoopEntryIds.put(id, whileDecId);
 
             ControlFlow m2w = UMLFactory.eINSTANCE.createControlFlow();
-            m2w.setSource(merge); m2w.setTarget(whileDec); activity.getEdges().add(m2w);
+            m2w.setSource(merge);
+            m2w.setTarget(whileDec);
+            activity.getEdges().add(m2w);
 
             if (!bodyNodeIds.isEmpty()) {
                 ControlFlow tb = UMLFactory.eINSTANCE.createControlFlow();
-                tb.setSource(whileDec); tb.setTarget(MainRunner.umlNodes.get(bodyNodeIds.get(0)));
-                OpaqueExpression wg = UMLFactory.eINSTANCE.createOpaqueExpression(); wg.getBodies().add(whileCondText);
-                tb.setGuard(wg); activity.getEdges().add(tb);
+                tb.setSource(whileDec);
+                tb.setTarget(MainRunner.umlNodes.get(bodyNodeIds.get(0)));
+                OpaqueExpression wg = UMLFactory.eINSTANCE.createOpaqueExpression();
+                wg.getBodies().add(whileCondText);
+                tb.setGuard(wg);
+                activity.getEdges().add(tb);
             }
 
             if (!bodyNodeIds.isEmpty()) {
@@ -402,7 +425,8 @@ public class LoopExpander {
                 String lastId = bodyNodeIds.get(bodyNodeIds.size() - 1);
                 if (!ifDecIds.containsValue(lastId)) {
                     ControlFlow toD = UMLFactory.eINSTANCE.createControlFlow();
-                    toD.setSource(MainRunner.umlNodes.get(lastId)); toD.setTarget(decision);
+                    toD.setSource(MainRunner.umlNodes.get(lastId));
+                    toD.setTarget(decision);
                     activity.getEdges().add(toD);
                 }
             }
@@ -413,46 +437,65 @@ public class LoopExpander {
             MainRunner.whileLoopExitMergeIds.put(id, exitMergeId);
 
             ControlFlow w2e = UMLFactory.eINSTANCE.createControlFlow();
-            w2e.setSource(whileDec); w2e.setTarget(exitMerge);
-            OpaqueExpression wfg = UMLFactory.eINSTANCE.createOpaqueExpression(); wfg.getBodies().add("else");
-            w2e.setGuard(wfg); activity.getEdges().add(w2e);
+            w2e.setSource(whileDec);
+            w2e.setTarget(exitMerge);
+            OpaqueExpression wfg = UMLFactory.eINSTANCE.createOpaqueExpression();
+            wfg.getBodies().add("else");
+            w2e.setGuard(wfg);
+            activity.getEdges().add(w2e);
 
             ControlFlow u2e = UMLFactory.eINSTANCE.createControlFlow();
-            u2e.setSource(decision); u2e.setTarget(exitMerge);
-            OpaqueExpression ug = UMLFactory.eINSTANCE.createOpaqueExpression(); ug.getBodies().add(untilCondText);
-            u2e.setGuard(ug); activity.getEdges().add(u2e);
+            u2e.setSource(decision);
+            u2e.setTarget(exitMerge);
+            OpaqueExpression ug = UMLFactory.eINSTANCE.createOpaqueExpression();
+            ug.getBodies().add(untilCondText);
+            u2e.setGuard(ug);
+            activity.getEdges().add(u2e);
 
             ControlFlow back2 = UMLFactory.eINSTANCE.createControlFlow();
-            back2.setSource(decision); back2.setTarget(merge);
-            OpaqueExpression bg2 = UMLFactory.eINSTANCE.createOpaqueExpression(); bg2.getBodies().add("else");
-            back2.setGuard(bg2); activity.getEdges().add(back2);
+            back2.setSource(decision);
+            back2.setTarget(merge);
+            OpaqueExpression bg2 = UMLFactory.eINSTANCE.createOpaqueExpression();
+            bg2.getBodies().add("else");
+            back2.setGuard(bg2);
+            activity.getEdges().add(back2);
         } else {
             // Pure while: Merge → Decision → (cond: body → Merge, else: PureExitMerge)
             ControlFlow m2d = UMLFactory.eINSTANCE.createControlFlow();
-            m2d.setSource(merge); m2d.setTarget(decision); activity.getEdges().add(m2d);
+            m2d.setSource(merge);
+            m2d.setTarget(decision);
+            activity.getEdges().add(m2d);
 
             exitMergeId = id + "_pureWhileExitMerge";
-            MergeNode pureExit = (MergeNode) activity.createOwnedNode((name != null ? name : "Loop") + "_ExitMerge", UMLPackage.Literals.MERGE_NODE);
+            MergeNode pureExit = (MergeNode) activity.createOwnedNode(
+                (name != null ? name : "Loop") + "_ExitMerge", UMLPackage.Literals.MERGE_NODE);
             MainRunner.umlNodes.put(exitMergeId, pureExit);
             MainRunner.whileLoopPureExitMergeIds.put(id, exitMergeId);
 
             ControlFlow e2x = UMLFactory.eINSTANCE.createControlFlow();
-            e2x.setSource(decision); e2x.setTarget(pureExit);
-            OpaqueExpression eg = UMLFactory.eINSTANCE.createOpaqueExpression(); eg.getBodies().add("else");
-            e2x.setGuard(eg); activity.getEdges().add(e2x);
+            e2x.setSource(decision);
+            e2x.setTarget(pureExit);
+            OpaqueExpression eg = UMLFactory.eINSTANCE.createOpaqueExpression();
+            eg.getBodies().add("else");
+            e2x.setGuard(eg);
+            activity.getEdges().add(e2x);
 
             if (!bodyNodeIds.isEmpty()) {
                 ControlFlow tb = UMLFactory.eINSTANCE.createControlFlow();
-                tb.setSource(decision); tb.setTarget(MainRunner.umlNodes.get(bodyNodeIds.get(0)));
-                OpaqueExpression tg = UMLFactory.eINSTANCE.createOpaqueExpression(); tg.getBodies().add(condText);
-                tb.setGuard(tg); activity.getEdges().add(tb);
+                tb.setSource(decision);
+                tb.setTarget(MainRunner.umlNodes.get(bodyNodeIds.get(0)));
+                OpaqueExpression tg = UMLFactory.eINSTANCE.createOpaqueExpression();
+                tg.getBodies().add(condText);
+                tb.setGuard(tg);
+                activity.getEdges().add(tb);
 
                 buildBodyInternalFlows(activity, bodyNodeIds, ifDecIds, ifMrgIds, ifCondTexts, ifThenBranchIds, MainRunner.umlNodes, merge, null);
 
                 String lastId = bodyNodeIds.get(bodyNodeIds.size() - 1);
                 if (!ifDecIds.containsValue(lastId)) {
                     ControlFlow back = UMLFactory.eINSTANCE.createControlFlow();
-                    back.setSource(MainRunner.umlNodes.get(lastId)); back.setTarget(merge);
+                    back.setSource(MainRunner.umlNodes.get(lastId));
+                    back.setTarget(merge);
                     activity.getEdges().add(back);
                 }
             }
@@ -557,7 +600,9 @@ public class LoopExpander {
                                 EObject d = it.next();
                                 if (d instanceof org.omg.sysml.lang.sysml.Element) {
                                     String dId = ((org.omg.sysml.lang.sysml.Element) d).getElementId();
-                                    if (dId != null) MainRunner.loopBodyNodeIds.add(dId);
+                                    if (dId != null) {
+                                        MainRunner.loopBodyNodeIds.add(dId);
+                                    }
                                 }
                             }
                             break;
@@ -574,9 +619,13 @@ public class LoopExpander {
                             if (nestedLoop != null) {
                                 String[] res;
                                 String nc = nestedLoop.eClass().getName();
-                                if (nc.equals("ForLoopActionUsage")) res = expandNestedForLoop(activity, nestedLoop, sysmlBasePath);
-                                else if (nc.equals("WhileLoopActionUsage")) res = expandNestedWhileLoop(activity, nestedLoop, sysmlBasePath);
-                                else res = expandNestedLoopAction(activity, nestedLoop, sysmlBasePath);
+                                if (nc.equals("ForLoopActionUsage")) {
+                                    res = expandNestedForLoop(activity, nestedLoop, sysmlBasePath);
+                                } else if (nc.equals("WhileLoopActionUsage")) {
+                                    res = expandNestedWhileLoop(activity, nestedLoop, sysmlBasePath);
+                                } else {
+                                    res = expandNestedLoopAction(activity, nestedLoop, sysmlBasePath);
+                                }
                                 bodyActionId = res[0];
                                 MainRunner.logicalEdges.add(new MainRunner.EdgeData(mergeId, res[0]));
                                 MainRunner.logicalEdges.add(new MainRunner.EdgeData(res[1], mergeId));
@@ -584,20 +633,30 @@ public class LoopExpander {
                                     EObject d = it.next();
                                     if (d instanceof org.omg.sysml.lang.sysml.Element) {
                                         String dId = ((org.omg.sysml.lang.sysml.Element) d).getElementId();
-                                        if (dId != null) MainRunner.loopBodyNodeIds.add(dId);
+                                        if (dId != null) {
+                                            MainRunner.loopBodyNodeIds.add(dId);
+                                        }
                                     }
                                 }
                             } else {
                                 // 普通动作
                                 EObject bodyObj = gc;
                                 for (EObject inner : gc.eContents()) {
-                                    if (inner.eClass().getName().contains("AssignmentActionUsage")) { bodyObj = inner; break; }
+                                    if (inner.eClass().getName().contains("AssignmentActionUsage")) {
+                                        bodyObj = inner;
+                                        break;
+                                    }
                                 }
                                 String expr = ExpressionUtils.extractAssignmentText(bodyObj);
                                 String nodeName;
                                 String bodyText;
-                                if (!expr.isEmpty()) { nodeName = expr.replaceAll("[^a-zA-Z0-9_]", "_"); bodyText = expr; }
-                                else { nodeName = "ForLoopBody_" + gcId.substring(0, Math.min(8, gcId.length())); bodyText = "forLoopBody"; }
+                                if (!expr.isEmpty()) {
+                                    nodeName = expr.replaceAll("[^a-zA-Z0-9_]", "_");
+                                    bodyText = expr;
+                                } else {
+                                    nodeName = "ForLoopBody_" + gcId.substring(0, Math.min(8, gcId.length()));
+                                    bodyText = "forLoopBody";
+                                }
                                 ActivityNode bodyNode;
                                 if (!expr.isEmpty() && expr.contains("=")) {
                                     bodyNode = UmlHelper.createOpaqueActionForAssignment(activity, nodeName, expr);
@@ -710,7 +769,9 @@ public class LoopExpander {
                             EObject d = it.next();
                             if (d instanceof org.omg.sysml.lang.sysml.Element) {
                                 String dId = ((org.omg.sysml.lang.sysml.Element) d).getElementId();
-                                if (dId != null) MainRunner.loopBodyNodeIds.add(dId);
+                                if (dId != null) {
+                            MainRunner.loopBodyNodeIds.add(dId);
+                        }
                             }
                         }
                     } else if (oreCn.contains("ActionUsage") || oreCn.contains("ReferenceUsage")) {
@@ -734,7 +795,9 @@ public class LoopExpander {
                                 EObject d = it.next();
                                 if (d instanceof org.omg.sysml.lang.sysml.Element) {
                                     String dId = ((org.omg.sysml.lang.sysml.Element) d).getElementId();
-                                    if (dId != null) MainRunner.loopBodyNodeIds.add(dId);
+                                    if (dId != null) {
+                            MainRunner.loopBodyNodeIds.add(dId);
+                        }
                                 }
                             }
                         } else {

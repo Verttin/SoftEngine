@@ -16,10 +16,12 @@ class UmlHelper {
      * 创建 CallBehaviorAction 并关联一个带 body 的 OpaqueBehavior。
      * 等效于 OpaqueAction，但 Moka 的 ExecutionFactoryL2 原生支持 CallBehaviorAction。
      */
-    static CallBehaviorAction createCallBehaviorActionWithBody(Activity parentActivity, String nodeName, String body, String language) {
+    static CallBehaviorAction createCallBehaviorActionWithBody(
+            Activity parentActivity, String nodeName, String body, String language) {
         // 1. 在父 Activity 上创建一个 OpaqueBehavior 作为行为定义
         String behaviorName = ExpressionUtils.capitalizeFirst(nodeName) + "Behavior";
-        OpaqueBehavior behavior = (OpaqueBehavior) parentActivity.createOwnedBehavior(behaviorName, UMLPackage.Literals.OPAQUE_BEHAVIOR);
+        OpaqueBehavior behavior = (OpaqueBehavior) parentActivity.createOwnedBehavior(
+                behaviorName, UMLPackage.Literals.OPAQUE_BEHAVIOR);
 
         // 2. 设置 body（如果有）
         if (body != null && !body.isEmpty()) {
@@ -28,7 +30,8 @@ class UmlHelper {
         }
 
         // 3. 创建 CallBehaviorAction 节点
-        CallBehaviorAction cba = (CallBehaviorAction) parentActivity.createOwnedNode(nodeName, UMLPackage.Literals.CALL_BEHAVIOR_ACTION);
+        CallBehaviorAction cba = (CallBehaviorAction) parentActivity.createOwnedNode(
+                nodeName, UMLPackage.Literals.CALL_BEHAVIOR_ACTION);
 
         // 4. 关联 behavior 引用
         cba.setBehavior(behavior);
@@ -55,7 +58,8 @@ class UmlHelper {
     static ActivityNode createOpaqueActionForAssignment(Activity parentActivity, String nodeName, String assignExpr) {
         if (assignExpr != null && !assignExpr.isEmpty()) {
             // 创建 OpaqueAction 并设置 sysml-assign 体
-            OpaqueAction oa = (OpaqueAction) parentActivity.createOwnedNode(nodeName, UMLPackage.Literals.OPAQUE_ACTION);
+            OpaqueAction oa = (OpaqueAction) parentActivity.createOwnedNode(
+                    nodeName, UMLPackage.Literals.OPAQUE_ACTION);
             // 将 "=" 格式转为 ":=" 格式供 Moka sysml-assign 解析
             String sysmlAssignBody = assignExpr.replaceFirst("\\s*=\\s*", " := ");
             oa.getBodies().add(sysmlAssignBody);

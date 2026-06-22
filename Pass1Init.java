@@ -37,7 +37,9 @@ class Pass1Init {
                     ctx.activity = (Activity) ctx.umlModel.createPackagedElement(name, UMLPackage.Literals.ACTIVITY);
                 }
                 // 变量/参数初始化已移至活动创建后的独立扫描 (PASS 1.5)
-                if (name != null && (className.contains("ActionUsage") || className.contains("ForkNode") || className.contains("JoinNode") || className.equals("MergeNode") || className.equals("DecisionNode"))) {
+                if (name != null && (className.contains("ActionUsage")
+                        || className.contains("ForkNode") || className.contains("JoinNode")
+                        || className.equals("MergeNode") || className.equals("DecisionNode"))) {
                     ctx.existingNodeNames.add(name);
                 }
             }
@@ -147,10 +149,14 @@ class Pass1Init {
                     String eid = ((org.omg.sysml.lang.sysml.Element) obj).getElementId();
                     String dn = ((org.omg.sysml.lang.sysml.Element) obj).getDeclaredName();
                     String cn = obj.eClass().getName();
-                    if (eid != null && dn != null) globalIdToName.put(eid, dn);
+                    if (eid != null && dn != null) {
+                        globalIdToName.put(eid, dn);
+                    }
                     if ("CalculationUsage".equals(cn)) {
                         isCalcModel = true;
-                        if (eid != null && dn != null) ctx.calcIdToName.put(eid, dn);
+                        if (eid != null && dn != null) {
+                            ctx.calcIdToName.put(eid, dn);
+                        }
                         // extract calc def type name from FeatureTyping href
                         if (eid != null) {
                             for (EObject child : obj.eContents()) {
@@ -188,9 +194,13 @@ class Pass1Init {
                     System.out.println("[DEBUG] Calc activity: " + calcActName);
                 }
             }
-            if (ctx.activity == null) ctx.activity = (Activity) ctx.umlModel.createPackagedElement("CalcActivity", UMLPackage.Literals.ACTIVITY);
+            if (ctx.activity == null) {
+                ctx.activity = (Activity) ctx.umlModel.createPackagedElement("CalcActivity", UMLPackage.Literals.ACTIVITY);
+            }
         } else {
-            if (ctx.activity == null) ctx.activity = (Activity) ctx.umlModel.createPackagedElement("DefaultActivity", UMLPackage.Literals.ACTIVITY);
+            if (ctx.activity == null) {
+                ctx.activity = (Activity) ctx.umlModel.createPackagedElement("DefaultActivity", UMLPackage.Literals.ACTIVITY);
+            }
         }
 
         ctx.isCalcModel = isCalcModel;
@@ -266,12 +276,14 @@ class Pass1Init {
                             } else {
                                 for (EStructuralFeature feat : obj.eClass().getEAllStructuralFeatures()) {
                                     if (feat.getName().contains("direction") || feat.getName().contains("Direction")) {
-                                        try {
-                                            Object val = obj.eGet(feat);
-                                            if (val instanceof String && !((String) val).isEmpty()) {
-                                                isParam = true;
-                                            }
-                                        } catch (Exception ignored) {}
+                            try {
+                                Object val = obj.eGet(feat);
+                                if (val instanceof String && !((String) val).isEmpty()) {
+                                    isParam = true;
+                                }
+                            } catch (Exception ignored) {
+                                // ignored
+                            }
                                     }
                                 }
                             }

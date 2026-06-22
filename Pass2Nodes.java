@@ -58,7 +58,9 @@ class Pass2Nodes {
             if (!ctx.decideConditionGroups.isEmpty()) {
                 System.out.println("[DEBUG] Pre-populated decideConditionGroups: " + ctx.decideConditionGroups);
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+            // ignored
+        }
 
         TreeIterator<EObject> iterator = resource.getAllContents();
         String lastCheckIfUuid = null;
@@ -82,7 +84,9 @@ class Pass2Nodes {
                                 skipNestedLoop = true;
                                 break;
                             }
-                            if (nlpc.contains("ActionDefinition") || nlpc.contains("Package")) break;
+                            if (nlpc.contains("ActionDefinition") || nlpc.contains("Package")) {
+                                break;
+                            }
                             nlParent = nlParent.eContainer();
                         }
                         if (skipNestedLoop) {
@@ -131,7 +135,9 @@ class Pass2Nodes {
                                         break; // 只取第一个 ParameterMembership 中的条件
                                     }
                                 }
-                                if (conditionText != null) break;
+                                if (conditionText != null) {
+                                    break;
+                                }
                             }
                         }
                         
@@ -150,7 +156,9 @@ class Pass2Nodes {
                                     matchIdx++;
                                 }
                                 ctx.consumedIfRegexCount++;
-                            } catch (Exception ignored) {}
+                            } catch (Exception ignored) {
+                                // ignored
+                            }
                         }
                         
                         if (conditionText == null || conditionText.isEmpty()) {
@@ -168,7 +176,9 @@ class Pass2Nodes {
                         MainRunner.umlNodes.put(id, decision);
                         if (name != null) { MainRunner.uuidToNameMap.put(id, name); MainRunner.nameToIdMap.put(name, id); }
                         
-                        if (lastCheckIfUuid != null) MainRunner.logicalEdges.add(new MainRunner.EdgeData(lastCheckIfUuid, id));
+                        if (lastCheckIfUuid != null) {
+                            MainRunner.logicalEdges.add(new MainRunner.EdgeData(lastCheckIfUuid, id));
+                        }
                         
                         // === 从 ParameterMembership 子元素提取分支并创建节点 ===
                         List<String> branchBodies = new ArrayList<>(); // 分支体 UUID
@@ -375,7 +385,9 @@ class Pass2Nodes {
                                                 EObject d = it.next();
                                                 if (d instanceof org.omg.sysml.lang.sysml.Element) {
                                                     String dId = ((org.omg.sysml.lang.sysml.Element) d).getElementId();
-                                                    if (dId != null) MainRunner.loopBodyNodeIds.add(dId);
+                                                    if (dId != null) {
+                                                        MainRunner.loopBodyNodeIds.add(dId);
+                                                    }
                                                 }
                                             }
                                         } else if (oreCn.contains("ActionUsage") || oreCn.contains("ReferenceUsage")) {
@@ -399,12 +411,16 @@ class Pass2Nodes {
                                                     EObject d = it.next();
                                                     if (d instanceof org.omg.sysml.lang.sysml.Element) {
                                                         String dId = ((org.omg.sysml.lang.sysml.Element) d).getElementId();
-                                                        if (dId != null) MainRunner.loopBodyNodeIds.add(dId);
+                                                        if (dId != null) {
+                                                            MainRunner.loopBodyNodeIds.add(dId);
+                                                        }
                                                     }
                                                 }
                                             } else {
                                                 String cId = ((org.omg.sysml.lang.sysml.Element) ore).getElementId();
-                                                if (cId != null) bodyActions.add(cId);
+                                                if (cId != null) {
+                                                    bodyActions.add(cId);
+                                                }
                                             }
                                         }
                                     }
@@ -416,7 +432,9 @@ class Pass2Nodes {
                             for (EObject child : obj.eContents()) {
                                 if (child.eClass().getName().contains("ActionUsage") || child.eClass().getName().contains("ReferenceUsage")) {
                                     String cId = ((org.omg.sysml.lang.sysml.Element) child).getElementId();
-                                    if (cId != null) bodyActions.add(cId);
+                                    if (cId != null) {
+                                        bodyActions.add(cId);
+                                    }
                                 }
                             }
                         }
@@ -453,7 +471,9 @@ class Pass2Nodes {
                                         break;
                                     }
                                 }
-                                if (loopVarName != null) break;
+                                if (loopVarName != null) {
+                                    break;
+                                }
                             }
                         }
 
@@ -470,8 +490,12 @@ class Pass2Nodes {
                                                         String op = null;
                                                         try {
                                                             var opFeat = expr.eClass().getEStructuralFeature("operator");
-                                                            if (opFeat != null) op = (String) expr.eGet(opFeat);
-                                                        } catch (Exception ignored) {}
+                                                            if (opFeat != null) {
+                                                                op = (String) expr.eGet(opFeat);
+                                                            }
+                                                        } catch (Exception ignored) {
+                                                            // ignored
+                                                        }
                                                         // 收集 LiteralInteger 值
                                                         List<String> literals = new ArrayList<>();
                                                         for (java.util.Iterator<EObject> lit = expr.eAllContents(); lit.hasNext(); ) {
@@ -481,9 +505,13 @@ class Pass2Nodes {
                                                                     var valFeat = litObj.eClass().getEStructuralFeature("value");
                                                                     if (valFeat != null) {
                                                                         Object val = litObj.eGet(valFeat);
-                                                                        if (val != null) literals.add(val.toString());
+                                                                        if (val != null) {
+                                                                            literals.add(val.toString());
+                                                                        }
                                                                     }
-                                                                } catch (Exception ignored) {}
+                                                                } catch (Exception ignored) {
+                                                                    // ignored
+                                                                }
                                                             }
                                                         }
                                                         if (!literals.isEmpty()) {
@@ -548,7 +576,9 @@ class Pass2Nodes {
                                                     EObject d = it.next();
                                                     if (d instanceof org.omg.sysml.lang.sysml.Element) {
                                                         String dId = ((org.omg.sysml.lang.sysml.Element) d).getElementId();
-                                                        if (dId != null) MainRunner.loopBodyNodeIds.add(dId);
+                                                        if (dId != null) {
+                                                            MainRunner.loopBodyNodeIds.add(dId);
+                                                        }
                                                     }
                                                 }
                                                 break;
@@ -595,7 +625,9 @@ class Pass2Nodes {
                         }
                         {
                             List<String> bodyActions = new ArrayList<>();
-                            if (bodyActionId != null) bodyActions.add(bodyActionId);
+                            if (bodyActionId != null) {
+                                bodyActions.add(bodyActionId);
+                            }
                             MainRunner.loopBodyActions.put(id, bodyActions);
                         }
 
@@ -611,7 +643,9 @@ class Pass2Nodes {
                                         if (deepId != null) {
                                             MainRunner.loopBodyNodeIds.add(deepId);
                                         }
-                                    } catch (Exception ignored) {}
+                                    } catch (Exception ignored) {
+                                        // ignored
+                                    }
                                 }
                             }
                         }
@@ -639,7 +673,9 @@ class Pass2Nodes {
                                 String condFromPM = null;
                                 for (java.util.Iterator<EObject> deepIt = child.eAllContents(); deepIt.hasNext(); ) {
                                     EObject deep = deepIt.next();
-                                    if (condFromPM != null) break; // 已找到, 不再搜索
+                                    if (condFromPM != null) {
+                                        break; // 已找到, 不再搜索
+                                    }
                                     String deepCn = deep.eClass().getName();
                                     if (deepCn.contains("Expression")) {
                                         // OperatorExpression, FeatureReferenceExpression, etc.
@@ -658,7 +694,9 @@ class Pass2Nodes {
                                     }
                                 }
                                 if (condFromPM != null && !condFromPM.isEmpty()) {
-                                    if (pmIdx == 1) whileCondText = condFromPM;
+                                    if (pmIdx == 1) {
+                                        whileCondText = condFromPM;
+                                    }
                                     else untilCondText = condFromPM;
                                 }
                             }
@@ -673,8 +711,11 @@ class Pass2Nodes {
                         
                         // condText 用于 loopConditionText (PASS 4 回边守卫)
                         String condText;
-                        if (hasUntil) condText = untilCondText;
-                        else if (hasWhile) condText = whileCondText;
+                        if (hasUntil) {
+                            condText = untilCondText;
+                        } else if (hasWhile) {
+                            condText = whileCondText;
+                        }
                         else condText = "";
                         
                         MainRunner.whileLoopCondText.put(id, condText);
@@ -694,7 +735,9 @@ class Pass2Nodes {
                                     if (!fm.eClass().getName().equals("FeatureMembership")) continue;
                                     for (EObject inner : fm.eContents()) {
                                         String ic = inner.eClass().getName();
-                                        if (ic.equals("SuccessionAsUsage") || ic.equals("ParameterMembership")) continue;
+                                        if (ic.equals("SuccessionAsUsage") || ic.equals("ParameterMembership")) {
+                                            continue;
+                                        }
                                         bodyElements.add(inner);
                                     }
                                 }
@@ -743,7 +786,9 @@ class Pass2Nodes {
                                     String text = Files.readString(Paths.get(ctx.sysmlBasePath.replace(".sysmlx", ".sysml")));
                                     Matcher m = Pattern.compile("if\\s+([^\\{]+)\\s*\\{").matcher(text);
                                     if (m.find()) ifCondText = m.group(1).trim();
-                                } catch (Exception ignored) {}
+                                } catch (Exception ignored) {
+                                    // ignored
+                                }
                                 
                                 // AST 提取作为 fallback
                                 if (ifCondText == null || ifCondText.isEmpty()) {
@@ -808,7 +853,9 @@ class Pass2Nodes {
                                     EObject deep = deepIt.next();
                                     if (deep instanceof org.omg.sysml.lang.sysml.Element) {
                                         String deepId = ((org.omg.sysml.lang.sysml.Element) deep).getElementId();
-                                        if (deepId != null) MainRunner.loopBodyNodeIds.add(deepId);
+                                        if (deepId != null) {
+                                            MainRunner.loopBodyNodeIds.add(deepId);
+                                        }
                                     }
                                 }
                                 bodyIdx++;
@@ -828,7 +875,9 @@ class Pass2Nodes {
                                         if (val instanceof java.util.List) typedList = (java.util.List<?>) val;
                                         else if (val instanceof EObject) typedList = java.util.Collections.singletonList(val);
                                     }
-                                } catch (Exception ignored) {}
+                                } catch (Exception ignored) {
+                                    // ignored
+                                }
                                 if (typedList != null && !typedList.isEmpty() && typedList.get(0) instanceof EObject) {
                                     String typedClassName = ((EObject) typedList.get(0)).eClass().getName();
                                     if (typedClassName.contains("ActionDefinition")) {
@@ -1088,7 +1137,9 @@ class Pass2Nodes {
                                     Object dirVal = obj.eGet(dirFeat);
                                     if (dirVal instanceof String && !((String) dirVal).isEmpty()) isParam = true;
                                 }
-                            } catch (Exception ignored) {}
+                            } catch (Exception ignored) {
+                                // ignored
+                            }
                             // 检测参数: eContainer 链回溯是否为 FeatureMembership
                             if (!isParam) {
                                 EObject parent = obj.eContainer();
@@ -1168,7 +1219,9 @@ class Pass2Nodes {
                                                     if (anc3Cn.contains("Package")) break;
                                                     anc3 = anc3.eContainer();
                                                 }
-                                                if (skipThis) break;
+                                                if (skipThis) {
+                                                    break;
+                                                }
                                             }
                                         }
                                     }
@@ -1199,7 +1252,9 @@ class Pass2Nodes {
                                     typedList = java.util.Collections.singletonList(val);
                                 }
                             }
-                        } catch (Exception ignored) {}
+                        } catch (Exception ignored) {
+                            // ignored
+                        }
                         if (ctx.firstActionId == null) ctx.firstActionId = id;
                         if (typedList != null && !typedList.isEmpty() && typedList.get(0) instanceof EObject) {
                             String typedClassName = ((EObject) typedList.get(0)).eClass().getName();
@@ -1240,7 +1295,9 @@ class Pass2Nodes {
                                         if (paramEid != null) {
                                             ctx.featureIdToPinInfo.put(paramEid, new String[]{id, paramName, direction});
                                         }
-                                    } catch (Exception ignored) {}
+                                    } catch (Exception ignored) {
+                                        // ignored
+                                    }
 
                                     if (direction.equals("out")) {
                                         // 手动创建 OutputPin, 通过 "result" containment 添加到 CBA
@@ -1309,7 +1366,9 @@ class Pass2Nodes {
                                                                 }
                                                             }
                                                         }
-                                                    } catch (Exception ignored) {}
+                                                    } catch (Exception ignored) {
+                                                        // ignored
+                                                    }
                                                 }
                                             }
                                         }
@@ -1334,7 +1393,9 @@ class Pass2Nodes {
                                                                         }
                                                                     }
                                                                 }
-                                                            } catch (Exception ignored) {}
+                                                            } catch (Exception ignored) {
+                                                                // ignored
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -1391,7 +1452,9 @@ class Pass2Nodes {
                                                         if (defParamEid != null) {
                                                             ctx.featureIdToPinInfo.put(defParamEid, new String[]{id, defParamName, defDirection});
                                                         }
-                                                    } catch (Exception ignored) {}
+                                                    } catch (Exception ignored) {
+                                                        // ignored
+                                                    }
                                                 } else if (defDirection.equals("out")) {
                                                     OutputPin pin = UMLFactory.eINSTANCE.createOutputPin();
                                                     pin.setName(defParamName);
@@ -1413,7 +1476,9 @@ class Pass2Nodes {
                                                         if (defParamEid != null) {
                                                             ctx.featureIdToPinInfo.put(defParamEid, new String[]{id, defParamName, defDirection});
                                                         }
-                                                    } catch (Exception ignored) {}
+                                                    } catch (Exception ignored) {
+                                                        // ignored
+                                                    }
                                                 }
                                             }
                                         }
@@ -1482,7 +1547,9 @@ class Pass2Nodes {
                                                     if (tAnc3Cn.contains("Package")) break;
                                                     tAnc3 = tAnc3.eContainer();
                                                 }
-                                                if (skipTerm) break;
+                                                if (skipTerm) {
+                                                    break;
+                                                }
                                             }
                                         }
                                     }
@@ -1538,7 +1605,9 @@ class Pass2Nodes {
                                     }
                                 }
                                 System.out.println("[DEBUG] DecidedConditionGroups: " + ctx.decideConditionGroups);
-                            } catch (Exception ignored) {}
+                            } catch (Exception ignored) {
+                                // ignored
+                            }
                         }
                         if (ctx.decideConditionIndex < ctx.decideConditionGroups.size()) {
                             List<String> group = ctx.decideConditionGroups.get(ctx.decideConditionIndex);
@@ -1568,7 +1637,9 @@ class Pass2Nodes {
                                     ctx.sysmlMergeNodeName = mMerge.group(1);
                                     System.out.println("[DEBUG] .sysml merge node name: " + ctx.sysmlMergeNodeName);
                                 }
-                            } catch (Exception ignored) {}
+                            } catch (Exception ignored) {
+                                // ignored
+                            }
                         }
                     }
                     // sysml:TransitionUsage 检测 (decide 语法中带 guard 的分支边)
@@ -1594,7 +1665,9 @@ class Pass2Nodes {
                                     }
                                 }
                             }
-                            if (guardText != null) break;
+                            if (guardText != null) {
+                                break;
+                            }
                         }
                         // Fallback: .sysml regex 按序提取条件
                         if (guardText == null || guardText.isEmpty()) {
@@ -1609,7 +1682,9 @@ class Pass2Nodes {
                                     }
                                     count++;
                                 }
-                            } catch (Exception ignored) {}
+                            } catch (Exception ignored) {
+                                // ignored
+                            }
                         }
                         // 2. 确定目标动作名: 按文档顺序, 第 N 个 TransitionUsage 对应第 N 个 if...then 目标
                         String targetName = null;
@@ -1649,7 +1724,9 @@ class Pass2Nodes {
                                                                                     }
                                                                                 }
                                                                             }
-                                                                        } catch (Exception ignored) {}
+                                                                        } catch (Exception ignored) {
+                                                                            // ignored
+                                                                        }
                                                                     }
                                                                 }
                                                             }
@@ -1679,7 +1756,9 @@ class Pass2Nodes {
                                     }
                                     count++;
                                 }
-                            } catch (Exception ignored) {}
+                            } catch (Exception ignored) {
+                                // ignored
+                            }
                         }
                         // 4. 存储延迟边 (目标 ID 在 PASS 2c 解析)
                         // 优先从 Membership 子元素提取源 DecisionNode (比 lastDecideDecisionId 更准确)
@@ -1693,11 +1772,17 @@ class Pass2Nodes {
                                         Object meVal = mChild.eGet(meFeat);
                                         if (meVal instanceof EObject) {
                                             String meId = null;
-                                            try { meId = ((org.omg.sysml.lang.sysml.Element) meVal).getElementId(); } catch (Exception ignored) {}
+                                            try {
+                                                meId = ((org.omg.sysml.lang.sysml.Element) meVal).getElementId();
+                                            } catch (Exception ignored) {
+                                                // ignored
+                                            }
                                             if (meId != null) transSrcId = meId;
                                         }
                                     }
-                                } catch (Exception ignored) {}
+                                } catch (Exception ignored) {
+                                    // ignored
+                                }
                             }
                         }
                         if (transSrcId == null) {
@@ -1762,7 +1847,9 @@ class Pass2Nodes {
                                                                             }
                                                                         }
                                                                     }
-                                                                } catch (Exception ignored) {}
+                                                                } catch (Exception ignored) {
+                                                                    // ignored
+                                                                }
                                                             }
                                                         }
                                                         if (chainNames.size() >= 2) {
@@ -1800,7 +1887,9 @@ class Pass2Nodes {
                                     }
                                     matchIdx++;
                                 }
-                            } catch (Exception ignored) {}
+                            } catch (Exception ignored) {
+                                // ignored
+                            }
                         }
                         // Record flow binding for DATA FLOW PASS (deferred - names may not be in nameToIdMap yet)
                         if (srcActionName != null && srcPinName != null && tgtActionName != null && tgtPinName != null) {
@@ -1839,7 +1928,9 @@ class Pass2Nodes {
                                                             }
                                                         }
                                                     }
-                                                } catch (Exception ignored) {}
+                                                } catch (Exception ignored) {
+                                                    // ignored
+                                                }
                                             }
                                         }
                                         // 2. Get pin name from FeatureMembership -> ReferenceUsage -> Redefinition -> redefinedFeature
@@ -1862,7 +1953,9 @@ class Pass2Nodes {
                                                                             }
                                                                         }
                                                                     }
-                                                                } catch (Exception ignored) {}
+                                                                } catch (Exception ignored) {
+                                                                    // ignored
+                                                                }
                                                             }
                                                         }
                                                     }
@@ -1887,7 +1980,9 @@ class Pass2Nodes {
                                         tgtPinName = mSF.group(4);
                                     }
                                 }
-                            } catch (Exception ignored) {}
+                            } catch (Exception ignored) {
+                                // ignored
+                            }
                         }
                         // Record for deferred resolution (both ObjectFlow + ControlFlow)
                         if (srcActionName != null && srcPinName != null && tgtActionName != null && tgtPinName != null) {
@@ -1972,14 +2067,18 @@ class Pass2Nodes {
                                                                                 }
                                                                             }
                                                                         }
-                                                                    } catch (Exception ignored) {}
+                                                                    } catch (Exception ignored) {
+                                                                        // ignored
+                                                                    }
                                                                 }
                                                             }
                                                             // Feature 自身的 elementId 也作为备选
                                                             try {
                                                                 String fcId = ((org.omg.sysml.lang.sysml.Element) fc).getElementId();
                                                                 if (fcId != null && lastChainId == null) lastChainId = fcId;
-                                                            } catch (Exception ignored) {}
+                                                            } catch (Exception ignored) {
+                                                                // ignored
+                                                            }
                                                         }
                                                     }
                                                     if (lastChainId != null && !endFeatureIds.contains(lastChainId)) {
@@ -1998,13 +2097,17 @@ class Pass2Nodes {
                                 if (end1 == null && endFeatureIds.size() > 2) {
                                     for (String eid : endFeatureIds.subList(2, endFeatureIds.size())) {
                                         end1 = ctx.featureIdToPinInfo.get(eid);
-                                        if (end1 != null) break;
+                                        if (end1 != null) {
+                                            break;
+                                        }
                                     }
                                 }
                                 if (end2 == null && endFeatureIds.size() > 2) {
                                     for (String eid : endFeatureIds.subList(2, endFeatureIds.size())) {
                                         end2 = ctx.featureIdToPinInfo.get(eid);
-                                        if (end2 != null) break;
+                                        if (end2 != null) {
+                                            break;
+                                        }
                                     }
                                 }
                                 if (end1 != null && end2 != null) {
@@ -2208,7 +2311,9 @@ class Pass2Nodes {
                                                                                     initialStateId = ((org.omg.sysml.lang.sysml.Element) rfVal).getElementId();
                                                                                 }
                                                                             }
-                                                                        } catch (Exception ignored) {}
+                                                                        } catch (Exception ignored) {
+                                                                            // ignored
+                                                                        }
                                                                     }
                                                                 }
                                                             }
@@ -2236,7 +2341,9 @@ class Pass2Nodes {
                                                                 srcStateId = ((org.omg.sysml.lang.sysml.Element) meVal).getElementId();
                                                             }
                                                         }
-                                                    } catch (Exception ignored) {}
+                                                    } catch (Exception ignored) {
+                                                        // ignored
+                                                    }
                                                 }
                                                 // Trigger: TransitionFeatureMembership(kind=trigger) -> AcceptActionUsage -> ParameterMembership -> ReferenceUsage -> FeatureTyping
                                                 if (tcCn.equals("TransitionFeatureMembership")) {
@@ -2258,7 +2365,9 @@ class Pass2Nodes {
                                                                                                     triggerTypeName = ((org.omg.sysml.lang.sysml.Element) typeVal).getDeclaredName();
                                                                                                 }
                                                                                             }
-                                                                                        } catch (Exception ignored) {}
+                                                                                        } catch (Exception ignored) {
+                                                                                            // ignored
+                                                                                        }
                                                                                     }
                                                                                 }
                                                                             }
@@ -2289,7 +2398,9 @@ class Pass2Nodes {
                                                                                                     tgtStateId = ((org.omg.sysml.lang.sysml.Element) rfVal).getElementId();
                                                                                                 }
                                                                                             }
-                                                                                        } catch (Exception ignored) {}
+                                                                                        } catch (Exception ignored) {
+                                                                                            // ignored
+                                                                                        }
                                                                                     }
                                                                                 }
                                                                             }
