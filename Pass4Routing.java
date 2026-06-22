@@ -228,7 +228,7 @@ class Pass4Routing {
             // Check if PASS 3-ext already added a post-loop succession from decId
             boolean hasPostLoopFromPass3ext = false;
             for (MainRunner.EdgeData fe : ctx.finalRoutedEdges) {
-                if (fe.source.equals(decId) && !fe.target.equals("END_NODE") && !fe.target.equals("START_NODE")) {
+                if (fe.source.equals(decId) && !fe."END_NODE".equals(target) && !fe."START_NODE".equals(target)) {
                     ActivityNode tgtNode = MainRunner.umlNodes.get(fe.target);
                     if (tgtNode != null && !(tgtNode instanceof MergeNode) && !(tgtNode instanceof DecisionNode)
                         && !fe.target.equals(mergeId)) {
@@ -333,7 +333,7 @@ class Pass4Routing {
                                 if (exit != null && MainRunner.umlNodes.containsKey(entry) && MainRunner.umlNodes.containsKey(exit)) {
                                     chainConstructs.add(new String[]{cId, entry, exit});
                                 }
-                            } else if (cc.equals("LoopActionUsage")) {
+                            } else if ("LoopActionUsage".equals(cc)) {
                                 String entry = MainRunner.loopStartMerge.get(cId);
                                 String exit = MainRunner.loopEndDecision.get(cId);
                                 if (entry != null && exit != null && MainRunner.umlNodes.containsKey(entry) && MainRunner.umlNodes.containsKey(exit)) {
@@ -368,6 +368,7 @@ class Pass4Routing {
                     // 只在第一个有控制结构的 ActionUsage 上停 (顶层 action 块)
                     if (!chainConstructs.isEmpty()) break;
                 } catch (Exception e) {
+                    // G.ERR.02: EMF reflection may throw various runtime exceptions
                     System.out.println("[CHAIN-DEBUG] Exception: " + e.getMessage());
                 }
             }
@@ -388,13 +389,13 @@ class Pass4Routing {
             
             // 1. 移除被 chain 取代的 Start→Merge 边 (从 ctx.finalRoutedEdges)
             ctx.finalRoutedEdges.removeIf(e -> 
-                e.source.equals("START_NODE") && chainEntries.contains(e.target));
+                e."START_NODE".equals(source) && chainEntries.contains(e.target));
             
             // 2. 移除 chain exit→END_NODE 的冲突边 (从 ctx.finalRoutedEdges 和 ctx.activity.getEdges())
             for (String[] c : chainConstructs) {
                 String exitId = c[2];
                 ctx.finalRoutedEdges.removeIf(e -> 
-                    e.source.equals(exitId) && e.target.equals("END_NODE"));
+                    e.source.equals(exitId) && e."END_NODE".equals(target));
                 // 从 ctx.activity.getEdges() 中移除对应的 ControlFlow
                 for (java.util.Iterator<org.eclipse.uml2.uml.ActivityEdge> aeIt = ctx.activity.getEdges().iterator(); aeIt.hasNext(); ) {
                     org.eclipse.uml2.uml.ActivityEdge ae = aeIt.next();
@@ -450,7 +451,7 @@ class Pass4Routing {
             // Check if exit already has outgoing edge to a post-loop target
             boolean hasPostLoopTarget = false;
             for (MainRunner.EdgeData fe : ctx.finalRoutedEdges) {
-                if (fe.source.equals(lastExit) && !fe.target.equals("END_NODE") && !fe.target.equals("START_NODE")) {
+                if (fe.source.equals(lastExit) && !fe."END_NODE".equals(target) && !fe."START_NODE".equals(target)) {
                     // Check if target is a loop-internal node (merge) or a post-loop action
                     ActivityNode tgtNode = MainRunner.umlNodes.get(fe.target);
                     if (tgtNode != null && !(tgtNode instanceof MergeNode)) {
@@ -469,7 +470,7 @@ class Pass4Routing {
             }
             if (!hasExitToEnd) {
                 for (MainRunner.EdgeData fe : ctx.finalRoutedEdges) {
-                    if (fe.source.equals(lastExit) && fe.target.equals("END_NODE")) {
+                    if (fe.source.equals(lastExit) && fe."END_NODE".equals(target)) {
                         hasExitToEnd = true;
                         break;
                     }

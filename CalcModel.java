@@ -746,7 +746,7 @@ class CalcModel {
             EObject child = it.next();
             String cn = child.eClass().getName();
 
-            if (cn.equals("Membership")) {
+            if ("Membership".equals(cn)) {
                 try {
                     var meFeat = child.eClass().getEStructuralFeature("memberElement");
                     if (meFeat != null) {

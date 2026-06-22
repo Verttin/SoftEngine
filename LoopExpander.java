@@ -1,3 +1,4 @@
+
 package sysml2uml;
 
 import java.util.*;
@@ -7,19 +8,17 @@ import org.eclipse.uml2.uml.*;
 
 public class LoopExpander {
 
-    static void buildBodyInternalFlows(
-            Activity activity, List<String> bodyNodeIds,
-            Map<String, String> ifDecisionIds, Map<String, String> ifMergeIds,
-            Map<String, String> ifConditionTexts, Map<String, List<String>> ifThenBranchIds,
-            Map<String, ActivityNode> umlNodes,
-            ActivityNode loopMergeNode, ActivityNode untilDecisionNode) {
-        
+    static void buildBodyInternalFlows(Activity activity, List<String> bodyNodeIds, Map<String, String> ifDecisionIds,
+            Map<String, String> ifMergeIds, Map<String, String> ifConditionTexts,
+            Map<String, List<String>> ifThenBranchIds, Map<String, ActivityNode> umlNodes, ActivityNode loopMergeNode,
+            ActivityNode untilDecisionNode) {
+
         // 遍历 bodyNodeIds, 构建顺序流
         int i = 0;
         while (i < bodyNodeIds.size()) {
             String currentId = bodyNodeIds.get(i);
             ActivityNode currentNode = umlNodes.get(currentId);
-            
+
             // 检查当前是否是 if DecisionNode
             String ifBaId = null;
             for (String key : ifDecisionIds.keySet()) {
@@ -28,13 +27,13 @@ public class LoopExpander {
                     break;
                 }
             }
-            
+
             if (ifBaId != null) {
                 // 这是 if DecisionNode, 需要处理 if 分支
                 String ifCondText = ifConditionTexts.get(ifBaId);
                 List<String> thenBranchIds = ifThenBranchIds.get(ifBaId);
                 ActivityNode ifDecisionNode = currentNode;
-                
+
                 // ifDecision → thenBranch 动作 (guard = condition)
                 if (thenBranchIds != null && !thenBranchIds.isEmpty()) {
                     for (String thenId : thenBranchIds) {
@@ -47,14 +46,14 @@ public class LoopExpander {
                             thenGuard.getBodies().add(ifCondText);
                             thenFlow.setGuard(thenGuard);
                             activity.getEdges().add(thenFlow);
-                            
+
                             // thenBranch 动作 → 后续节点 (下一个 bodyNode 或直到末尾)
                             // then 分支执行完后应该连到后续的节点
                             // 这里先不创建边, 由后续顺序流逻辑处理
                         }
                     }
                 }
-                
+
                 // ifDecision[else] → 下一个节点 (跳过 if then 分支)
                 // else 分支直接连到 bodyNodeIds 中 thenBranchIds 之后的节点
                 // 找到 thenBranchIds 之后的位置
@@ -66,16 +65,17 @@ public class LoopExpander {
                     boolean isThenBranch = false;
                     if (thenBranchIds != null) {
                         for (String tid : thenBranchIds) {
-                        if (nextId.equals(tid)) {
-                            isThenBranch = true;
-                            break;
-                        }
+                            if (nextId.equals(tid)) {
+                                isThenBranch = true;
+                                break;
+                            }
                         }
                     }
-                    if (!isThenBranch) break;
+                    if (!isThenBranch)
+                        break;
                     nextIdx++;
                 }
-                
+
                 if (nextIdx < bodyNodeIds.size()) {
                     // else 分支连到后续节点
                     String elseTargetId = bodyNodeIds.get(nextIdx);
@@ -99,7 +99,7 @@ public class LoopExpander {
                     elseFlow.setGuard(elseGuard);
                     activity.getEdges().add(elseFlow);
                 }
-                
+
                 // 处理 thenBranch 之间的顺序流，以及 thenBranch 到后续节点的连接
                 if (thenBranchIds != null && !thenBranchIds.isEmpty()) {
                     for (int t = 0; t < thenBranchIds.size(); t++) {
@@ -135,12 +135,12 @@ public class LoopExpander {
                         }
                     }
                 }
-                
+
                 // 跳过 ifDecision 和 thenBranchIds，继续处理后续节点
                 i = nextIdx;
                 continue;
             }
-            
+
             // 常规顺序流: current → next
             if (i + 1 < bodyNodeIds.size()) {
                 String nextId = bodyNodeIds.get(i + 1);
@@ -159,6 +159,7 @@ public class LoopExpander {
     /**
      * 展开嵌套的 WhileLoopActionUsage (在另一个循环的 body 内部).
      * 创建完整的 Merge→Decision→body→backEdge 结构.
+     * 
      * @return [entryId, exitId] — entry=Merge, exit=PureExitMerge/ExitMerge
      */
     public static String[] expandNestedWhileLoop(Activity activity, EObject loopObj, String sysmlBasePath) {
@@ -169,28 +170,34 @@ public class LoopExpander {
         String whileCondText = null, untilCondText = null;
         int pmIdx = 0;
         for (EObject child : loopObj.eContents()) {
-            if (!child.eClass().getName().equals("ParameterMembership")) continue;
+            if (!child.eClass().getName().equals("ParameterMembership"))
+                continue;
             pmIdx++;
             if (pmIdx == 1 || pmIdx == 3) {
                 String condFromPM = null;
-                for (java.util.Iterator<EObject> deepIt = child.eAllContents(); deepIt.hasNext(); ) {
+                for (java.util.Iterator<EObject> deepIt = child.eAllContents(); deepIt.hasNext();) {
                     EObject deep = deepIt.next();
-                    if (condFromPM != null) break;
+                    if (condFromPM != null)
+                        break;
                     String deepCn = deep.eClass().getName();
                     if (deepCn.contains("Expression")) {
                         String astText = ExpressionUtils.buildExpressionText(deep);
-                        if (astText != null && !astText.isEmpty() && !astText.contains(" . ") && ExpressionUtils.isValidExpression(astText))
+                        if (astText != null && !astText.isEmpty() && !astText.contains(" . ")
+                                && ExpressionUtils.isValidExpression(astText))
                             condFromPM = astText;
-                    } else if (deepCn.equals("ReferenceUsage")) {
+                    } else if ("ReferenceUsage".equals(deepCn)) {
                         if (deep instanceof org.omg.sysml.lang.sysml.Element) {
                             String refName = ((org.omg.sysml.lang.sysml.Element) deep).getDeclaredName();
-                            if (refName != null && !refName.isEmpty()) condFromPM = refName;
+                            if (refName != null && !refName.isEmpty())
+                                condFromPM = refName;
                         }
                     }
                 }
                 if (condFromPM != null && !condFromPM.isEmpty()) {
-                    if (pmIdx == 1) whileCondText = condFromPM;
-                    else untilCondText = condFromPM;
+                    if (pmIdx == 1)
+                        whileCondText = condFromPM;
+                    else
+                        untilCondText = condFromPM;
                 }
             }
         }
@@ -199,9 +206,12 @@ public class LoopExpander {
         boolean hasUntil = untilCondText != null && !untilCondText.isEmpty();
         boolean isUntil = hasUntil && !hasWhile;
         String condText;
-        if (hasUntil) condText = untilCondText;
-        else if (hasWhile) condText = whileCondText;
-        else condText = "";
+        if (hasUntil)
+            condText = untilCondText;
+        else if (hasWhile)
+            condText = whileCondText;
+        else
+            condText = "";
 
         MainRunner.whileLoopCondText.put(id, condText);
         MainRunner.whileLoopIsUntil.put(id, isUntil);
@@ -224,14 +234,18 @@ public class LoopExpander {
         // --- 收集 body 元素 ---
         List<EObject> bodyElements = new ArrayList<>();
         for (EObject child : loopObj.eContents()) {
-            if (!child.eClass().getName().equals("ParameterMembership")) continue;
+            if (!child.eClass().getName().equals("ParameterMembership"))
+                continue;
             for (EObject ore : child.eContents()) {
-                if (!ore.eClass().getName().equals("ActionUsage")) continue;
+                if (!ore.eClass().getName().equals("ActionUsage"))
+                    continue;
                 for (EObject fm : ore.eContents()) {
-                    if (!fm.eClass().getName().equals("FeatureMembership")) continue;
+                    if (!fm.eClass().getName().equals("FeatureMembership"))
+                        continue;
                     for (EObject inner : fm.eContents()) {
                         String ic = inner.eClass().getName();
-                        if (ic.equals("SuccessionAsUsage") || ic.equals("ParameterMembership")) continue;
+                        if ("SuccessionAsUsage".equals(ic) || "ParameterMembership".equals(ic))
+                            continue;
                         bodyElements.add(inner);
                     }
                 }
@@ -247,15 +261,16 @@ public class LoopExpander {
 
         for (EObject ba : bodyElements) {
             String baClass = ba.eClass().getName();
-            if (!(ba instanceof org.omg.sysml.lang.sysml.Element)) continue;
+            if (!(ba instanceof org.omg.sysml.lang.sysml.Element))
+                continue;
             String baId = ((org.omg.sysml.lang.sysml.Element) ba).getElementId();
             String baName = ((org.omg.sysml.lang.sysml.Element) ba).getDeclaredName();
 
-            if (baClass.equals("WhileLoopActionUsage")) {
+            if ("WhileLoopActionUsage".equals(baClass)) {
                 String[] res = expandNestedWhileLoop(activity, ba, sysmlBasePath);
                 bodyNodeIds.add(res[0]);
                 MainRunner.loopBodyNodeIds.add(res[0]);
-                for (java.util.Iterator<EObject> it = ba.eAllContents(); it.hasNext(); ) {
+                for (java.util.Iterator<EObject> it = ba.eAllContents(); it.hasNext();) {
                     EObject d = it.next();
                     if (d instanceof org.omg.sysml.lang.sysml.Element) {
                         String dId = ((org.omg.sysml.lang.sysml.Element) d).getElementId();
@@ -264,11 +279,11 @@ public class LoopExpander {
                         }
                     }
                 }
-            } else if (baClass.equals("ForLoopActionUsage")) {
+            } else if ("ForLoopActionUsage".equals(baClass)) {
                 String[] res = expandNestedForLoop(activity, ba, sysmlBasePath);
                 bodyNodeIds.add(res[0]);
                 MainRunner.loopBodyNodeIds.add(res[0]);
-                for (java.util.Iterator<EObject> it = ba.eAllContents(); it.hasNext(); ) {
+                for (java.util.Iterator<EObject> it = ba.eAllContents(); it.hasNext();) {
                     EObject d = it.next();
                     if (d instanceof org.omg.sysml.lang.sysml.Element) {
                         String dId = ((org.omg.sysml.lang.sysml.Element) d).getElementId();
@@ -277,11 +292,11 @@ public class LoopExpander {
                         }
                     }
                 }
-            } else if (baClass.equals("LoopActionUsage")) {
+            } else if ("LoopActionUsage".equals(baClass)) {
                 String[] res = expandNestedLoopAction(activity, ba, sysmlBasePath);
                 bodyNodeIds.add(res[0]);
                 MainRunner.loopBodyNodeIds.add(res[0]);
-                for (java.util.Iterator<EObject> it = ba.eAllContents(); it.hasNext(); ) {
+                for (java.util.Iterator<EObject> it = ba.eAllContents(); it.hasNext();) {
                     EObject d = it.next();
                     if (d instanceof org.omg.sysml.lang.sysml.Element) {
                         String dId = ((org.omg.sysml.lang.sysml.Element) d).getElementId();
@@ -290,33 +305,38 @@ public class LoopExpander {
                         }
                     }
                 }
-            } else if (baClass.equals("IfActionUsage")) {
-                // IfActionUsage inside nested while body — same logic as main iterator's while body
+            } else if ("IfActionUsage".equals(baClass)) {
+                // IfActionUsage inside nested while body — same logic as main iterator's while
+                // body
                 String ifCondText = null;
-                for (java.util.Iterator<EObject> it = ba.eAllContents(); it.hasNext(); ) {
+                for (java.util.Iterator<EObject> it = ba.eAllContents(); it.hasNext();) {
                     EObject ifChild = it.next();
                     if (ifChild.eClass().getName().contains("OperatorExpression")) {
                         String exprText = ExpressionUtils.buildExpressionText(ifChild);
-                        if (exprText != null && !exprText.isEmpty() && !exprText.contains(" . ") && ExpressionUtils.isValidExpression(exprText)) {
+                        if (exprText != null && !exprText.isEmpty() && !exprText.contains(" . ")
+                                && ExpressionUtils.isValidExpression(exprText)) {
                             ifCondText = exprText;
                             break;
                         }
                     }
                 }
-                if (ifCondText == null || ifCondText.isEmpty()) ifCondText = "true";
+                if (ifCondText == null || ifCondText.isEmpty())
+                    ifCondText = "true";
                 String ifDecId = baId + "_ifDecision";
-                DecisionNode ifDec = (DecisionNode) activity.createOwnedNode(ifCondText + "?", UMLPackage.Literals.DECISION_NODE);
+                DecisionNode ifDec = (DecisionNode) activity.createOwnedNode(ifCondText + "?",
+                        UMLPackage.Literals.DECISION_NODE);
                 MainRunner.umlNodes.put(ifDecId, ifDec);
                 ifDecIds.put(baId, ifDecId);
                 ifCondTexts.put(baId, ifCondText);
                 List<String> tBranchIds = new ArrayList<>();
-                for (java.util.Iterator<EObject> it = ba.eAllContents(); it.hasNext(); ) {
+                for (java.util.Iterator<EObject> it = ba.eAllContents(); it.hasNext();) {
                     EObject ifChild = it.next();
                     if (ifChild instanceof org.omg.sysml.lang.sysml.Element) {
                         String ic2 = ifChild.eClass().getName();
                         String in = ((org.omg.sysml.lang.sysml.Element) ifChild).getDeclaredName();
                         String iid = ((org.omg.sysml.lang.sysml.Element) ifChild).getElementId();
-                        if (in != null && !in.isEmpty() && ic2.contains("ActionUsage") && !ic2.equals("IfActionUsage")) {
+                        if (in != null && !in.isEmpty() && ic2.contains("ActionUsage")
+                                && !"IfActionUsage".equals(ic2)) {
                             tBranchIds.add(iid);
                         }
                     }
@@ -327,7 +347,9 @@ public class LoopExpander {
             } else {
                 // Regular ActionUsage / AssignmentActionUsage
                 String expr = ExpressionUtils.extractAssignmentText(ba);
-                String nodeName = expr.isEmpty() ? (baName != null ? baName : ExpressionUtils.sanitizeName(baClass)) : expr.replaceAll("[^a-zA-Z0-9_]", "_");
+                String nodeName = expr.isEmpty()
+                        ? (baName != null ? baName : ExpressionUtils.sanitizeName(baClass))
+                        : expr.replaceAll("[^a-zA-Z0-9_]", "_");
                 String bodyText = expr.isEmpty() ? null : expr;
                 ActivityNode bodyNode;
                 if (bodyText != null && !bodyText.isEmpty() && bodyText.contains("=")) {
@@ -348,7 +370,8 @@ public class LoopExpander {
         // 创建 then-branch 子动作节点 (for IfActionUsage inside body)
         for (String ifId : ifThenBranchIds.keySet()) {
             for (String thenId : ifThenBranchIds.get(ifId)) {
-                if (MainRunner.umlNodes.containsKey(thenId)) continue;
+                if (MainRunner.umlNodes.containsKey(thenId))
+                    continue;
                 String thenName = null;
                 var it2 = loopObj.eAllContents();
                 while (it2.hasNext()) {
@@ -380,7 +403,8 @@ public class LoopExpander {
                 m2b.setSource(merge);
                 m2b.setTarget(MainRunner.umlNodes.get(bodyNodeIds.get(0)));
                 activity.getEdges().add(m2b);
-                buildBodyInternalFlows(activity, bodyNodeIds, ifDecIds, ifMrgIds, ifCondTexts, ifThenBranchIds, MainRunner.umlNodes, merge, decision);
+                buildBodyInternalFlows(activity, bodyNodeIds, ifDecIds, ifMrgIds, ifCondTexts, ifThenBranchIds,
+                        MainRunner.umlNodes, merge, decision);
                 String lastId = bodyNodeIds.get(bodyNodeIds.size() - 1);
                 boolean lastIsIf = ifDecIds.containsValue(lastId);
                 if (!lastIsIf) {
@@ -401,7 +425,8 @@ public class LoopExpander {
         } else if (hasWhile && hasUntil) {
             // while+until dual condition
             String whileDecId = id + "_whileEntryDecision";
-            DecisionNode whileDec = (DecisionNode) activity.createOwnedNode(whileCondText + "?", UMLPackage.Literals.DECISION_NODE);
+            DecisionNode whileDec = (DecisionNode) activity.createOwnedNode(whileCondText + "?",
+                    UMLPackage.Literals.DECISION_NODE);
             MainRunner.umlNodes.put(whileDecId, whileDec);
             MainRunner.whileLoopEntryIds.put(id, whileDecId);
 
@@ -421,7 +446,8 @@ public class LoopExpander {
             }
 
             if (!bodyNodeIds.isEmpty()) {
-                buildBodyInternalFlows(activity, bodyNodeIds, ifDecIds, ifMrgIds, ifCondTexts, ifThenBranchIds, MainRunner.umlNodes, merge, decision);
+                buildBodyInternalFlows(activity, bodyNodeIds, ifDecIds, ifMrgIds, ifCondTexts, ifThenBranchIds,
+                        MainRunner.umlNodes, merge, decision);
                 String lastId = bodyNodeIds.get(bodyNodeIds.size() - 1);
                 if (!ifDecIds.containsValue(lastId)) {
                     ControlFlow toD = UMLFactory.eINSTANCE.createControlFlow();
@@ -432,7 +458,8 @@ public class LoopExpander {
             }
 
             exitMergeId = id + "_whileUntilExitMerge";
-            MergeNode exitMerge = (MergeNode) activity.createOwnedNode((name != null ? name : "Loop") + "_ExitMerge", UMLPackage.Literals.MERGE_NODE);
+            MergeNode exitMerge = (MergeNode) activity.createOwnedNode((name != null ? name : "Loop") + "_ExitMerge",
+                    UMLPackage.Literals.MERGE_NODE);
             MainRunner.umlNodes.put(exitMergeId, exitMerge);
             MainRunner.whileLoopExitMergeIds.put(id, exitMergeId);
 
@@ -467,8 +494,8 @@ public class LoopExpander {
             activity.getEdges().add(m2d);
 
             exitMergeId = id + "_pureWhileExitMerge";
-            MergeNode pureExit = (MergeNode) activity.createOwnedNode(
-                (name != null ? name : "Loop") + "_ExitMerge", UMLPackage.Literals.MERGE_NODE);
+            MergeNode pureExit = (MergeNode) activity.createOwnedNode((name != null ? name : "Loop") + "_ExitMerge",
+                    UMLPackage.Literals.MERGE_NODE);
             MainRunner.umlNodes.put(exitMergeId, pureExit);
             MainRunner.whileLoopPureExitMergeIds.put(id, exitMergeId);
 
@@ -489,7 +516,8 @@ public class LoopExpander {
                 tb.setGuard(tg);
                 activity.getEdges().add(tb);
 
-                buildBodyInternalFlows(activity, bodyNodeIds, ifDecIds, ifMrgIds, ifCondTexts, ifThenBranchIds, MainRunner.umlNodes, merge, null);
+                buildBodyInternalFlows(activity, bodyNodeIds, ifDecIds, ifMrgIds, ifCondTexts, ifThenBranchIds,
+                        MainRunner.umlNodes, merge, null);
 
                 String lastId = bodyNodeIds.get(bodyNodeIds.size() - 1);
                 if (!ifDecIds.containsValue(lastId)) {
@@ -501,13 +529,14 @@ public class LoopExpander {
             }
         }
 
-        System.out.println("[NESTED-WHILE] id=" + id.substring(0, Math.min(8, id.length()))
-            + " cond=" + condText + " isUntil=" + isUntil);
+        System.out.println("[NESTED-WHILE] id=" + id.substring(0, Math.min(8, id.length())) + " cond=" + condText
+                + " isUntil=" + isUntil);
         return new String[]{mergeId, exitMergeId};
     }
 
     /**
      * 展开嵌套的 ForLoopActionUsage (在另一个循环的 body 内部).
+     * 
      * @return [entryId, exitId] — entry=Merge, exit=Decision
      */
     public static String[] expandNestedForLoop(Activity activity, EObject loopObj, String sysmlBasePath) {
@@ -518,7 +547,8 @@ public class LoopExpander {
         String decisionId = id + "_forLoopDecision";
         String loopName = (name != null ? name : "ForLoop");
         MergeNode merge = (MergeNode) activity.createOwnedNode(loopName + "_Merge", UMLPackage.Literals.MERGE_NODE);
-        DecisionNode decision = (DecisionNode) activity.createOwnedNode(loopName + "_Decision", UMLPackage.Literals.DECISION_NODE);
+        DecisionNode decision = (DecisionNode) activity.createOwnedNode(loopName + "_Decision",
+                UMLPackage.Literals.DECISION_NODE);
         MainRunner.umlNodes.put(mergeId, merge);
         MainRunner.umlNodes.put(decisionId, decision);
         MainRunner.loopStartMerge.put(id, mergeId);
@@ -534,7 +564,8 @@ public class LoopExpander {
                         break;
                     }
                 }
-                if (loopVarName != null) break;
+                if (loopVarName != null)
+                    break;
             }
         }
 
@@ -549,19 +580,23 @@ public class LoopExpander {
                                 for (EObject expr : gg.eContents()) {
                                     if (expr.eClass().getName().contains("OperatorExpression")) {
                                         List<String> literals = new ArrayList<>();
-                                        for (java.util.Iterator<EObject> lit = expr.eAllContents(); lit.hasNext(); ) {
+                                        for (java.util.Iterator<EObject> lit = expr.eAllContents(); lit.hasNext();) {
                                             EObject litObj = lit.next();
                                             if (litObj.eClass().getName().contains("LiteralInteger")) {
                                                 try {
                                                     var valFeat = litObj.eClass().getEStructuralFeature("value");
                                                     if (valFeat != null) {
                                                         Object val = litObj.eGet(valFeat);
-                                                        if (val != null) literals.add(val.toString());
+                                                        if (val != null)
+                                                            literals.add(val.toString());
                                                     }
-                                                } catch (Exception ignored) {}
+                                                } catch (Exception ignored) {
+                                                    // safeproperty value extraction failed, continue
+                                                }
                                             }
                                         }
-                                        if (!literals.isEmpty()) rangeText = String.join(", ", literals);
+                                        if (!literals.isEmpty())
+                                            rangeText = String.join(", ", literals);
                                     }
                                 }
                             }
@@ -573,9 +608,12 @@ public class LoopExpander {
         }
 
         String condText;
-        if (loopVarName != null && rangeText != null) condText = loopVarName + " in (" + rangeText + ")";
-        else if (loopVarName != null) condText = "hasNext(" + loopVarName + ")";
-        else condText = "hasNext";
+        if (loopVarName != null && rangeText != null)
+            condText = loopVarName + " in (" + rangeText + ")";
+        else if (loopVarName != null)
+            condText = "hasNext(" + loopVarName + ")";
+        else
+            condText = "hasNext";
         MainRunner.loopConditionText.put(id, condText);
 
         // 提取循环体 — 处理嵌套循环或普通动作
@@ -587,16 +625,17 @@ public class LoopExpander {
                 if (pmCount == 2) {
                     for (EObject gc : dc.eContents()) {
                         String gcClass = gc.eClass().getName();
-                        if (!(gc instanceof org.omg.sysml.lang.sysml.Element)) continue;
+                        if (!(gc instanceof org.omg.sysml.lang.sysml.Element))
+                            continue;
                         String gcId = ((org.omg.sysml.lang.sysml.Element) gc).getElementId();
 
-                        if (gcClass.equals("ForLoopActionUsage")) {
+                        if ("ForLoopActionUsage".equals(gcClass)) {
                             String[] res = expandNestedForLoop(activity, gc, sysmlBasePath);
                             bodyActionId = res[0]; // 用内层 merge 作为 body 代理
-                            // 连接: 外层 merge → 内层 merge,  内层 decision → 外层 merge (回边)
+                            // 连接: 外层 merge → 内层 merge, 内层 decision → 外层 merge (回边)
                             MainRunner.logicalEdges.add(new MainRunner.EdgeData(mergeId, res[0]));
                             MainRunner.logicalEdges.add(new MainRunner.EdgeData(res[1], mergeId));
-                            for (java.util.Iterator<EObject> it = gc.eAllContents(); it.hasNext(); ) {
+                            for (java.util.Iterator<EObject> it = gc.eAllContents(); it.hasNext();) {
                                 EObject d = it.next();
                                 if (d instanceof org.omg.sysml.lang.sysml.Element) {
                                     String dId = ((org.omg.sysml.lang.sysml.Element) d).getElementId();
@@ -611,7 +650,8 @@ public class LoopExpander {
                             EObject nestedLoop = null;
                             for (EObject inner : gc.eContents()) {
                                 String innerCn = inner.eClass().getName();
-                                if (innerCn.equals("ForLoopActionUsage") || innerCn.equals("WhileLoopActionUsage") || innerCn.equals("LoopActionUsage")) {
+                                if ("ForLoopActionUsage".equals(innerCn) || "WhileLoopActionUsage".equals(innerCn)
+                                        || "LoopActionUsage".equals(innerCn)) {
                                     nestedLoop = inner;
                                     break;
                                 }
@@ -619,9 +659,9 @@ public class LoopExpander {
                             if (nestedLoop != null) {
                                 String[] res;
                                 String nc = nestedLoop.eClass().getName();
-                                if (nc.equals("ForLoopActionUsage")) {
+                                if ("ForLoopActionUsage".equals(nc)) {
                                     res = expandNestedForLoop(activity, nestedLoop, sysmlBasePath);
-                                } else if (nc.equals("WhileLoopActionUsage")) {
+                                } else if ("WhileLoopActionUsage".equals(nc)) {
                                     res = expandNestedWhileLoop(activity, nestedLoop, sysmlBasePath);
                                 } else {
                                     res = expandNestedLoopAction(activity, nestedLoop, sysmlBasePath);
@@ -629,7 +669,7 @@ public class LoopExpander {
                                 bodyActionId = res[0];
                                 MainRunner.logicalEdges.add(new MainRunner.EdgeData(mergeId, res[0]));
                                 MainRunner.logicalEdges.add(new MainRunner.EdgeData(res[1], mergeId));
-                                for (java.util.Iterator<EObject> it = nestedLoop.eAllContents(); it.hasNext(); ) {
+                                for (java.util.Iterator<EObject> it = nestedLoop.eAllContents(); it.hasNext();) {
                                     EObject d = it.next();
                                     if (d instanceof org.omg.sysml.lang.sysml.Element) {
                                         String dId = ((org.omg.sysml.lang.sysml.Element) d).getElementId();
@@ -661,7 +701,8 @@ public class LoopExpander {
                                 if (!expr.isEmpty() && expr.contains("=")) {
                                     bodyNode = UmlHelper.createOpaqueActionForAssignment(activity, nodeName, expr);
                                 } else {
-                                    bodyNode = UmlHelper.createCallBehaviorActionWithBody(activity, nodeName, bodyText, "SysMLv2");
+                                    bodyNode = UmlHelper.createCallBehaviorActionWithBody(activity, nodeName, bodyText,
+                                            "SysMLv2");
                                 }
                                 MainRunner.umlNodes.put(gcId, bodyNode);
                                 MainRunner.uuidToNameMap.put(gcId, nodeName);
@@ -680,31 +721,38 @@ public class LoopExpander {
             MainRunner.logicalEdges.add(new MainRunner.EdgeData(bodyActionId, decisionId));
         }
         List<String> bodyActions = new ArrayList<>();
-        if (bodyActionId != null) bodyActions.add(bodyActionId);
+        if (bodyActionId != null)
+            bodyActions.add(bodyActionId);
         MainRunner.loopBodyActions.put(id, bodyActions);
 
         // 防止 PASS 4 误连
-        for (java.util.Iterator<EObject> deepIt = loopObj.eAllContents(); deepIt.hasNext(); ) {
+        for (java.util.Iterator<EObject> deepIt = loopObj.eAllContents(); deepIt.hasNext();) {
             EObject deep = deepIt.next();
             if (deep instanceof org.omg.sysml.lang.sysml.Element) {
                 String deepCn = deep.eClass().getName();
                 if (deepCn.contains("ActionUsage") || deepCn.contains("AssignmentActionUsage")) {
                     try {
                         String deepId = ((org.omg.sysml.lang.sysml.Element) deep).getElementId();
-                        if (deepId != null) MainRunner.loopBodyNodeIds.add(deepId);
-                    } catch (Exception ignored) {}
+                        if (deepId != null) {
+                            MainRunner.loopBodyNodeIds.add(deepId);
+                        }
+                    } catch (Exception ignored) {
+                        // element ID extraction failed, skip
+                    }
                 }
             }
         }
-        if (bodyActionId != null) MainRunner.loopBodyNodeIds.add(bodyActionId);
+        if (bodyActionId != null)
+            MainRunner.loopBodyNodeIds.add(bodyActionId);
 
-        System.out.println("[NESTED-FOR] id=" + id.substring(0, Math.min(8, id.length()))
-            + " var=" + loopVarName + " range=" + rangeText);
+        System.out.println("[NESTED-FOR] id=" + id.substring(0, Math.min(8, id.length())) + " var=" + loopVarName
+                + " range=" + rangeText);
         return new String[]{mergeId, decisionId};
     }
 
     /**
      * 展开嵌套的 LoopActionUsage (在另一个循环的 body 内部).
+     * 
      * @return [entryId, exitId] — entry=Merge, exit=Decision
      */
     public static String[] expandNestedLoopAction(Activity activity, EObject loopObj, String sysmlBasePath) {
@@ -713,8 +761,10 @@ public class LoopExpander {
 
         String mergeId = id + "_loopMerge";
         String decisionId = id + "_loopDecision";
-        MergeNode merge = (MergeNode) activity.createOwnedNode((name != null ? name : "Loop") + "_Merge", UMLPackage.Literals.MERGE_NODE);
-        DecisionNode decision = (DecisionNode) activity.createOwnedNode((name != null ? name : "Loop") + "_Decision", UMLPackage.Literals.DECISION_NODE);
+        MergeNode merge = (MergeNode) activity.createOwnedNode((name != null ? name : "Loop") + "_Merge",
+                UMLPackage.Literals.MERGE_NODE);
+        DecisionNode decision = (DecisionNode) activity.createOwnedNode((name != null ? name : "Loop") + "_Decision",
+                UMLPackage.Literals.DECISION_NODE);
         MainRunner.umlNodes.put(mergeId, merge);
         MainRunner.umlNodes.put(decisionId, decision);
         MainRunner.loopStartMerge.put(id, mergeId);
@@ -725,53 +775,62 @@ public class LoopExpander {
         {
             int pmI = 0;
             for (EObject child : loopObj.eContents()) {
-                if (!child.eClass().getName().equals("ParameterMembership")) continue;
+                if (!child.eClass().getName().equals("ParameterMembership"))
+                    continue;
                 pmI++;
                 if (pmI == 2) {
-                    for (java.util.Iterator<EObject> deepIt = child.eAllContents(); deepIt.hasNext(); ) {
+                    for (java.util.Iterator<EObject> deepIt = child.eAllContents(); deepIt.hasNext();) {
                         EObject deep = deepIt.next();
                         String deepCn = deep.eClass().getName();
                         if (deepCn.contains("Expression") && condText == null) {
                             String exprText = ExpressionUtils.buildExpressionText(deep);
-                            if (exprText != null && !exprText.isEmpty() && !exprText.contains(" . ") && ExpressionUtils.isValidExpression(exprText))
+                            if (exprText != null && !exprText.isEmpty() && !exprText.contains(" . ")
+                                    && ExpressionUtils.isValidExpression(exprText))
                                 condText = exprText;
-                        } else if (deepCn.equals("ReferenceUsage") && condText == null) {
+                        } else if ("ReferenceUsage".equals(deepCn) && condText == null) {
                             if (deep instanceof org.omg.sysml.lang.sysml.Element) {
                                 String refName = ((org.omg.sysml.lang.sysml.Element) deep).getDeclaredName();
-                                if (refName != null && !refName.isEmpty()) condText = refName;
+                                if (refName != null && !refName.isEmpty())
+                                    condText = refName;
                             }
                         }
                     }
                 }
             }
         }
-        if (condText == null || condText.isEmpty()) condText = "true";
+        if (condText == null || condText.isEmpty())
+            condText = "true";
         MainRunner.loopConditionText.put(id, condText);
 
         // 收集 body actions (PM1 中的子元素)
         List<String> bodyActions = new ArrayList<>();
         int pmI2 = 0;
         for (EObject child : loopObj.eContents()) {
-            if (!child.eClass().getName().equals("ParameterMembership")) continue;
+            if (!child.eClass().getName().equals("ParameterMembership"))
+                continue;
             pmI2++;
             if (pmI2 == 1) {
                 for (EObject ore : child.eContents()) {
                     String oreCn = ore.eClass().getName();
-                    if (oreCn.equals("ForLoopActionUsage") || oreCn.equals("WhileLoopActionUsage") || oreCn.equals("LoopActionUsage")) {
+                    if ("ForLoopActionUsage".equals(oreCn) || "WhileLoopActionUsage".equals(oreCn)
+                            || "LoopActionUsage".equals(oreCn)) {
                         // 嵌套循环 — 递归展开
                         String[] res;
-                        if (oreCn.equals("ForLoopActionUsage")) res = expandNestedForLoop(activity, ore, sysmlBasePath);
-                        else if (oreCn.equals("WhileLoopActionUsage")) res = expandNestedWhileLoop(activity, ore, sysmlBasePath);
-                        else res = expandNestedLoopAction(activity, ore, sysmlBasePath);
+                        if ("ForLoopActionUsage".equals(oreCn))
+                            res = expandNestedForLoop(activity, ore, sysmlBasePath);
+                        else if ("WhileLoopActionUsage".equals(oreCn))
+                            res = expandNestedWhileLoop(activity, ore, sysmlBasePath);
+                        else
+                            res = expandNestedLoopAction(activity, ore, sysmlBasePath);
                         bodyActions.add(res[0]);
                         MainRunner.logicalEdges.add(new MainRunner.EdgeData(mergeId, res[0]));
-                        for (java.util.Iterator<EObject> it = ore.eAllContents(); it.hasNext(); ) {
+                        for (java.util.Iterator<EObject> it = ore.eAllContents(); it.hasNext();) {
                             EObject d = it.next();
                             if (d instanceof org.omg.sysml.lang.sysml.Element) {
                                 String dId = ((org.omg.sysml.lang.sysml.Element) d).getElementId();
                                 if (dId != null) {
-                            MainRunner.loopBodyNodeIds.add(dId);
-                        }
+                                    MainRunner.loopBodyNodeIds.add(dId);
+                                }
                             }
                         }
                     } else if (oreCn.contains("ActionUsage") || oreCn.contains("ReferenceUsage")) {
@@ -779,30 +838,36 @@ public class LoopExpander {
                         EObject nestedLoop = null;
                         for (EObject inner : ore.eContents()) {
                             String innerCn = inner.eClass().getName();
-                            if (innerCn.equals("ForLoopActionUsage") || innerCn.equals("WhileLoopActionUsage") || innerCn.equals("LoopActionUsage")) {
-                                nestedLoop = inner; break;
+                            if ("ForLoopActionUsage".equals(innerCn) || "WhileLoopActionUsage".equals(innerCn)
+                                    || "LoopActionUsage".equals(innerCn)) {
+                                nestedLoop = inner;
+                                break;
                             }
                         }
                         if (nestedLoop != null) {
                             String[] res;
                             String nc = nestedLoop.eClass().getName();
-                            if (nc.equals("ForLoopActionUsage")) res = expandNestedForLoop(activity, nestedLoop, sysmlBasePath);
-                            else if (nc.equals("WhileLoopActionUsage")) res = expandNestedWhileLoop(activity, nestedLoop, sysmlBasePath);
-                            else res = expandNestedLoopAction(activity, nestedLoop, sysmlBasePath);
+                            if ("ForLoopActionUsage".equals(nc))
+                                res = expandNestedForLoop(activity, nestedLoop, sysmlBasePath);
+                            else if ("WhileLoopActionUsage".equals(nc))
+                                res = expandNestedWhileLoop(activity, nestedLoop, sysmlBasePath);
+                            else
+                                res = expandNestedLoopAction(activity, nestedLoop, sysmlBasePath);
                             bodyActions.add(res[0]);
                             MainRunner.logicalEdges.add(new MainRunner.EdgeData(mergeId, res[0]));
-                            for (java.util.Iterator<EObject> it = nestedLoop.eAllContents(); it.hasNext(); ) {
+                            for (java.util.Iterator<EObject> it = nestedLoop.eAllContents(); it.hasNext();) {
                                 EObject d = it.next();
                                 if (d instanceof org.omg.sysml.lang.sysml.Element) {
                                     String dId = ((org.omg.sysml.lang.sysml.Element) d).getElementId();
                                     if (dId != null) {
-                            MainRunner.loopBodyNodeIds.add(dId);
-                        }
+                                        MainRunner.loopBodyNodeIds.add(dId);
+                                    }
                                 }
                             }
                         } else {
                             String cId = ((org.omg.sysml.lang.sysml.Element) ore).getElementId();
-                            if (cId != null) bodyActions.add(cId);
+                            if (cId != null)
+                                bodyActions.add(cId);
                         }
                     }
                 }
@@ -816,8 +881,7 @@ public class LoopExpander {
             }
         }
 
-        System.out.println("[NESTED-LOOP] id=" + id.substring(0, Math.min(8, id.length()))
-            + " until=" + condText);
+        System.out.println("[NESTED-LOOP] id=" + id.substring(0, Math.min(8, id.length())) + " until=" + condText);
         return new String[]{mergeId, decisionId};
     }
 }

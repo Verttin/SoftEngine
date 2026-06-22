@@ -1,3 +1,4 @@
+
 package sysml2uml;
 
 import java.io.File;
@@ -32,23 +33,23 @@ import org.omg.sysml.xtext.xmi.SysMLxStandaloneSetup;
 
 /**
  * SysML v2 XMI → UML Activity 模型转换主控器。
- *
- * <p>本类仅负责：
+ * <p>
+ * 本类仅负责：
  * <ol>
- *   <li>维护跨 PASS 共享的静态状态 (umlNodes / logicalEdges / loop maps 等)</li>
- *   <li>编排各 PASS 的执行顺序</li>
- *   <li>提供 JUnit 测试入口和 CLI 入口</li>
+ * <li>维护跨 PASS 共享的静态状态 (umlNodes / logicalEdges / loop maps 等)</li>
+ * <li>编排各 PASS 的执行顺序</li>
+ * <li>提供 JUnit 测试入口和 CLI 入口</li>
  * </ol>
- *
- * <p>各 PASS 的具体逻辑已拆分到独立的类文件中:
+ * <p>
+ * 各 PASS 的具体逻辑已拆分到独立的类文件中:
  * <ul>
- *   <li>{@link Pass1Init}        — PASS 1 + 1.5: 画布初始化 + 变量扫描</li>
- *   <li>{@link Pass2Nodes}       — PASS 2: 节点实例化</li>
- *   <li>{@link Pass2Edges}       — PASS 2b~2f: 边构建</li>
- *   <li>{@link Pass3Edges}       — PASS 3 / 3b / 3-ext / 2c-ext: 控制流关系提取</li>
- *   <li>{@link Pass4Routing}     — PASS 4: 控制流拓扑路由</li>
- *   <li>{@link CalcModel}        — Calc 模型 PASS C1/C2/C3</li>
- *   <li>{@link Pass5Assembly}    — PASS 5: 数据流 + 控制流装配 + 输出</li>
+ * <li>{@link Pass1Init} — PASS 1 + 1.5: 画布初始化 + 变量扫描</li>
+ * <li>{@link Pass2Nodes} — PASS 2: 节点实例化</li>
+ * <li>{@link Pass2Edges} — PASS 2b~2f: 边构建</li>
+ * <li>{@link Pass3Edges} — PASS 3 / 3b / 3-ext / 2c-ext: 控制流关系提取</li>
+ * <li>{@link Pass4Routing} — PASS 4: 控制流拓扑路由</li>
+ * <li>{@link CalcModel} — Calc 模型 PASS C1/C2/C3</li>
+ * <li>{@link Pass5Assembly} — PASS 5: 数据流 + 控制流装配 + 输出</li>
  * </ul>
  */
 public class MainRunner {
@@ -147,9 +148,9 @@ public class MainRunner {
 
             // 从 runner.properties 读取 java.exe 路径和 phase0 classpath
             java.util.Properties props = new java.util.Properties();
-            java.nio.file.Path propsPath = java.nio.file.Paths.get(
-                    "D:\\about_computer\\software_engineering\\sysml-master\\git\\"
-                    + "SysML-v2-Pilot-Implementation\\org.omg.sysml.xpect.tests\\src\\sysml2uml\\runner.properties");
+            java.nio.file.Path propsPath = java.nio.file.Paths
+                    .get("D:\\about_computer\\software_engineering\\sysml-master\\git\\"
+                            + "SysML-v2-Pilot-Implementation\\org.omg.sysml.xpect.tests\\src\\sysml2uml\\runner.properties");
             try (java.io.InputStream is = java.nio.file.Files.newInputStream(propsPath)) {
                 props.load(is);
             }
@@ -157,19 +158,9 @@ public class MainRunner {
             String classPath = props.getProperty("phase0.cp").replace("\\\\", "\\");
             String libBase = props.getProperty("lib.base").replace("\\\\", "\\");
 
-            ProcessBuilder pbConvert = new ProcessBuilder(
-                javaExe,
-                "-Dfile.encoding=UTF-8",
-                "-Dstdout.encoding=UTF-8",
-                "-Dstderr.encoding=UTF-8",
-                "-classpath",
-                classPath,
-                "org.omg.sysml.xtext.util.SysML2XMI",
-                sysmlPath,
-                libBase + "/Kernel Libraries",
-                libBase + "/Systems Library",
-                libBase + "/Domain Libraries"
-            );
+            ProcessBuilder pbConvert = new ProcessBuilder(javaExe, "-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8",
+                    "-Dstderr.encoding=UTF-8", "-classpath", classPath, "org.omg.sysml.xtext.util.SysML2XMI", sysmlPath,
+                    libBase + "/Kernel Libraries", libBase + "/Systems Library", libBase + "/Domain Libraries");
 
             pbConvert.redirectErrorStream(true);
             Process processConvert = pbConvert.start();
@@ -267,14 +258,19 @@ public class MainRunner {
         EPackage.Registry.INSTANCE.put(SysMLPackage.eNS_URI, SysMLPackage.eINSTANCE);
         KerMLStandaloneSetup.doSetup();
         SysMLxStandaloneSetup.doSetup();
-        Resource.Factory.Registry.INSTANCE.getExtensionToFactoryMap().put(
-                UMLResource.FILE_EXTENSION, UMLResource.Factory.INSTANCE);
+        Resource.Factory.Registry.INSTANCE.getExtensionToFactoryMap().put(UMLResource.FILE_EXTENSION,
+                UMLResource.Factory.INSTANCE);
 
         ResourceSet resourceSet = new ResourceSetImpl();
         resourceSet.getPackageRegistry().put(UMLPackage.eNS_URI, UMLPackage.eINSTANCE);
 
         try {
-            Resource resource = resourceSet.getResource(URI.createFileURI(xmiFile.getAbsolutePath()), true);
+            // G.FIO.01: 使用getCanonicalPath()规范化文件路径，避免路径遍历漏洞
+            String canonicalPath = xmiFile.getCanonicalPath();
+            if (!canonicalPath.startsWith(xmiFile.getParentFile().getCanonicalPath())) {
+                throw new IllegalArgumentException("Invalid file path: " + canonicalPath);
+            }
+            Resource resource = resourceSet.getResource(URI.createFileURI(canonicalPath), true);
             UMLFactory factory = UMLFactory.eINSTANCE;
             Model umlModel = factory.createModel();
             umlModel.setName("TransformedUMLGraph");
@@ -333,8 +329,8 @@ public class MainRunner {
             // Calc 模型: PASS C1 + C2 + C3
             // ===================================================================
             if (ctx.isCalcModel) {
-                CalcModel.runCalcPipeline(ctx.activity, ctx, ctx.sysmlBasePath,
-                        ctx.calcIdToName, calcIdToType, globalIdToName);
+                CalcModel.runCalcPipeline(ctx.activity, ctx, ctx.sysmlBasePath, ctx.calcIdToName, calcIdToType,
+                        globalIdToName);
             }
 
             // ===================================================================

@@ -1,3 +1,4 @@
+
 package sysml2uml;
 
 import java.util.*;
@@ -19,9 +20,8 @@ class Pass1Init {
      * 设置 {@code ctx.activity}, {@code ctx.isCalcModel}, {@code ctx.calcIdToName},
      * 并填充调用方传入的 {@code calcIdToType} 和 {@code globalIdToName}。
      */
-    static void run(Resource resource, PipelineContext ctx,
-                    Map<String, String> calcIdToType,
-                    Map<String, String> globalIdToName) {
+    static void run(Resource resource, PipelineContext ctx, Map<String, String> calcIdToType,
+            Map<String, String> globalIdToName) {
 
         // ===================================================================
         // PASS 1: 画布初始化与变量解析
@@ -37,9 +37,9 @@ class Pass1Init {
                     ctx.activity = (Activity) ctx.umlModel.createPackagedElement(name, UMLPackage.Literals.ACTIVITY);
                 }
                 // 变量/参数初始化已移至活动创建后的独立扫描 (PASS 1.5)
-                if (name != null && (className.contains("ActionUsage")
-                        || className.contains("ForkNode") || className.contains("JoinNode")
-                        || className.equals("MergeNode") || className.equals("DecisionNode"))) {
+                if (name != null && (className.contains("ActionUsage") || className.contains("ForkNode")
+                        || className.contains("JoinNode") || "MergeNode".equals(className)
+                        || "DecisionNode".equals(className))) {
                     ctx.existingNodeNames.add(name);
                 }
             }
@@ -49,7 +49,8 @@ class Pass1Init {
             iterator = resource.getAllContents();
             EObject bestActionDef = null;
             String bestName = null;
-            // 优先级: 复合ActionDefinition(含子ActionUsage) > WhileLoopActionUsage > DecisionNode > MergeNode > 第一个 ActionDefinition
+            // 优先级: 复合ActionDefinition(含子ActionUsage) > WhileLoopActionUsage > DecisionNode
+            // > MergeNode > 第一个 ActionDefinition
             int bestPriority = 0;
             while (iterator.hasNext()) {
                 EObject obj = iterator.next();
@@ -59,24 +60,24 @@ class Pass1Init {
                         int priority = 1; // 默认优先级
                         int childActionCount = 0;
                         // 检查子节点类型来判断优先级
-                        for (java.util.Iterator<EObject> it = obj.eAllContents(); it.hasNext(); ) {
+                        for (java.util.Iterator<EObject> it = obj.eAllContents(); it.hasNext();) {
                             EObject child = it.next();
                             String childClass = child.eClass().getName();
-                            if (childClass.equals("WhileLoopActionUsage")) {
+                            if ("WhileLoopActionUsage".equals(childClass)) {
                                 priority = Math.max(priority, 4);
                                 break; // 最高优先级, 不用再找了
                             }
-                            if (childClass.equals("DecisionNode")) {
+                            if ("DecisionNode".equals(childClass)) {
                                 priority = Math.max(priority, 3);
                             }
-                            if (childClass.equals("MergeNode")) {
+                            if ("MergeNode".equals(childClass)) {
                                 priority = Math.max(priority, 2);
                             }
-                            if (childClass.equals("ForkNode") || childClass.equals("JoinNode")) {
+                            if ("ForkNode".equals(childClass) || "JoinNode".equals(childClass)) {
                                 priority = Math.max(priority, 3);
                             }
                             // 统计子 ActionUsage 数量 (复合动作检测)
-                            if (childClass.contains("ActionUsage") && !childClass.equals("ActionDefinition")) {
+                            if (childClass.contains("ActionUsage") && !"ActionDefinition".equals(childClass)) {
                                 childActionCount++;
                             }
                         }
@@ -106,7 +107,7 @@ class Pass1Init {
                             }
                             // Count child ActionUsages for composite action detection
                             String descCn = desc.eClass().getName();
-                            if (descCn.contains("ActionUsage") && !descCn.equals("ActionUsage")) {
+                            if (descCn.contains("ActionUsage") && !"ActionUsage".equals(descCn)) {
                                 // Sub-type of ActionUsage (e.g. WhileLoopActionUsage)
                                 usageChildActionCount++;
                             } else if ("ActionUsage".equals(descCn)) {
@@ -190,16 +191,19 @@ class Pass1Init {
             if (ctx.activity == null && calcActivityId != null) {
                 String calcActName = globalIdToName.get(calcActivityId);
                 if (calcActName != null) {
-                    ctx.activity = (Activity) ctx.umlModel.createPackagedElement(calcActName, UMLPackage.Literals.ACTIVITY);
+                    ctx.activity = (Activity) ctx.umlModel.createPackagedElement(calcActName,
+                            UMLPackage.Literals.ACTIVITY);
                     System.out.println("[DEBUG] Calc activity: " + calcActName);
                 }
             }
             if (ctx.activity == null) {
-                ctx.activity = (Activity) ctx.umlModel.createPackagedElement("CalcActivity", UMLPackage.Literals.ACTIVITY);
+                ctx.activity = (Activity) ctx.umlModel.createPackagedElement("CalcActivity",
+                        UMLPackage.Literals.ACTIVITY);
             }
         } else {
             if (ctx.activity == null) {
-                ctx.activity = (Activity) ctx.umlModel.createPackagedElement("DefaultActivity", UMLPackage.Literals.ACTIVITY);
+                ctx.activity = (Activity) ctx.umlModel.createPackagedElement("DefaultActivity",
+                        UMLPackage.Literals.ACTIVITY);
             }
         }
 
@@ -225,16 +229,16 @@ class Pass1Init {
                         String initValue = null;
                         for (EObject attrChild : obj.eContents()) {
                             String attrChildCn = attrChild.eClass().getName();
-                            if (attrChildCn.equals("FeatureValue")) {
+                            if ("FeatureValue".equals(attrChildCn)) {
                                 for (EObject fvChild : attrChild.eContents()) {
                                     String fvCn = fvChild.eClass().getName();
-                                    if (fvCn.equals("LiteralInteger")) {
+                                    if ("LiteralInteger".equals(fvCn)) {
                                         var valFeat = fvChild.eClass().getEStructuralFeature("value");
                                         if (valFeat != null) {
                                             Object val = fvChild.eGet(valFeat);
                                             initValue = val != null ? val.toString() : "0";
                                         }
-                                    } else if (fvCn.equals("LiteralBoolean")) {
+                                    } else if ("LiteralBoolean".equals(fvCn)) {
                                         var valFeat = fvChild.eClass().getEStructuralFeature("value");
                                         if (valFeat != null) {
                                             Object val = fvChild.eGet(valFeat);
@@ -242,7 +246,7 @@ class Pass1Init {
                                         } else {
                                             initValue = "0";
                                         }
-                                    } else if (fvCn.equals("LiteralReal") || fvCn.equals("LiteralString")) {
+                                    } else if ("LiteralReal".equals(fvCn) || "LiteralString".equals(fvCn)) {
                                         var valFeat = fvChild.eClass().getEStructuralFeature("value");
                                         if (valFeat != null) {
                                             Object val = fvChild.eGet(valFeat);
@@ -276,14 +280,14 @@ class Pass1Init {
                             } else {
                                 for (EStructuralFeature feat : obj.eClass().getEAllStructuralFeatures()) {
                                     if (feat.getName().contains("direction") || feat.getName().contains("Direction")) {
-                            try {
-                                Object val = obj.eGet(feat);
-                                if (val instanceof String && !((String) val).isEmpty()) {
-                                    isParam = true;
-                                }
-                            } catch (Exception ignored) {
-                                // ignored
-                            }
+                                        try {
+                                            Object val = obj.eGet(feat);
+                                            if (val instanceof String && !((String) val).isEmpty()) {
+                                                isParam = true;
+                                            }
+                                        } catch (Exception ignored) {
+                                            // ignored
+                                        }
                                     }
                                 }
                             }
